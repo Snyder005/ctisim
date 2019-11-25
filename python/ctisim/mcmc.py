@@ -65,5 +65,6 @@ class ModelFitting:
         flat = SegmentSimulator((len(flux_list), ncols), num_serial_prescan)
         flat.ramp_exp(flux_list)
 
-        return readout_amplifier.serial_readout(flat, num_serial_overscan, 
-                                                num_parallel_overscan, serial_register)
+        return readout_amplifier.serial_readout(flat, serial_register, 
+                                                num_serial_overscan=num_serial_overscan, 
+                                                num_parallel_overscan=num_parallel_overscan)

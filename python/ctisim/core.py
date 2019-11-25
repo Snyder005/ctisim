@@ -4,8 +4,6 @@ import os
 import copy
 from astropy.io import fits
 
-galsim.meta_data.share_dir = '/nfs/slac/g/ki/ki19/lsst/snyder18/LSST/lsst_stack/stack/miniconda3-4.5.12-1172c30/Linux64/galsim/2.1.4.lsst+6/share/galsim/'
-
 class SerialTrap:
     """Represents a serial register trap."""
     
@@ -25,7 +23,7 @@ class SerialRegister:
     def __init__(self, length, cti=0.0, trap=None):
         
         self.length = length
-        self.trap = None ## modify to contain more than one trap
+        self.trap = None
         self.cti = cti
         self.serial_register = np.zeros(length)
         
@@ -34,10 +32,12 @@ class SerialRegister:
        
     @classmethod
     def from_mcmc_results(cls, mcmc_results, length, mean_func=np.mean, burnin=500):
+        """Initialize SerialRegister object from MCMC results file."""
 
         raise NotImplementedError
         
     def add_trap(self, trap):
+        """Add charge trapping to trap locations in serial register."""
                     
         for l in trap.locations:
             if l < self.length:
@@ -87,12 +87,15 @@ class ReadoutAmplifier:
         return readout_amps
     
     def add_bias_drift(self, bias_drift_params):
-        self.drift_A = bias_drift_params[0]
-        self.drift_threshold = bias_drift_params[1]
-        self.drift_tau = bias_drift_params[2]
+        """Add parameters for bias drift."""
+        
+        self.drift_size = bias_drift_params[0]
+        self.drift_tau = bias_drift_params[1]
+        self.drift_threshold = bias_drift_params[2]
         self.do_bias_drift = True
                 
-    def serial_readout(self, segment, num_serial_overscan, num_parallel_overscan, serial_register):
+    def serial_readout(self, segment, serial_register, num_serial_overscan=10, num_parallel_overscan=0):
+        """Simulate serial readout of the segment image."""
         
         nrows = segment.nrows
         ncols = segment.ncols + segment.num_serial_prescan
@@ -113,7 +116,8 @@ class ReadoutAmplifier:
             
             ## Capture charge (if traps exist)
             if serial_register.trap is not None:
-                captured_charge = np.clip(free_charge*serial_register.trap.density_factor, trapped_charge, trap_array) - trapped_charge
+                captured_charge = np.clip(free_charge*serial_register.trap.density_factor, 
+                                          trapped_charge, trap_array) - trapped_charge
                 trapped_charge += captured_charge
                 free_charge -= captured_charge
     
@@ -122,7 +126,7 @@ class ReadoutAmplifier:
             deferred_charge = free_charge*cti
             
             if self.do_bias_drift:
-                new_drift = np.maximum(self.drift_A*(transferred_charge[:, 0]-self.drift_threshold), np.zeros(nrows))
+                new_drift = np.maximum(self.drift_size*(transferred_charge[:, 0]-self.drift_threshold), np.zeros(nrows))
                 drift = np.maximum(new_drift, drift*np.exp(-1/self.drift_tau))                
                 image[:iy, i] += transferred_charge[:, 0] + drift
             else:
@@ -158,6 +162,8 @@ class SegmentSimulator:
 
     @property
     def image(self):
+        """Return current segment image."""
+
         return self._imarr
 
     def reset(self):
@@ -318,15 +324,8 @@ class ImageSimulator:
                                   random_seed=None, psf_fwhm=psf_fwhm, 
                                   hit_flux=hit_flux, hit_hlr=hit_hlr)
             
-    def star_exp(self, num_stars, flux, psf_fwhm, stamp_length=40):
-        """Simulate star field exposure."""
-        
-        for i in range(1, 17):
-            self.amps[i].star_exp(num_stars, flux, psf_fwhm, stamp_length, 
-                                  random_seed=None)
-            
     def serial_readout(self, template_file, serial_registers, bitpix=32, 
-                       outfile='simulated.fits', **kwds):
+                       outfile='simulated_image.fits', **kwds):
 
         output = fits.HDUList()
         output.append(fits.PrimaryHDU())
@@ -334,14 +333,12 @@ class ImageSimulator:
         imarr_list = []
         for i in range(1, 17):
             
-            im = self.readout_amplifiers[i].serial_readout(self.amps[i], 
-                                                           self.num_serial_overscan, 
-                                                           self.num_parallel_overscan, 
-                                                           serial_registers[i])
+            im = self.readout_amplifiers[i].serial_readout(self.amps[i], serial_register[i],
+                                                           num_serial_overscan=self.num_serial_overscan, 
+                                                           num_parallel_overscan=self.num_parallel_overscan)
             imarr_list.append(im)
             output.append(fits.ImageHDU(data=im/self.readout_amplifiers[i].gain))
 
-        ## Use template file to create output FITs file
         with fits.open(template_file) as template:
             output[0].header.update(template[0].header)
             output[0].header['FILENAME'] = os.path.basename(outfile)
