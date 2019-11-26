@@ -8,7 +8,7 @@
 Additionally `ctisim` includes code to generate simulated CCD diagnostic segment and full-frame images, such as:
 * Flat field, or uniform illumination images.
 * Ramp images, or images with increasing illumination across rows.
-* <sup>55<sup>Fe soft x-ray exposures.
+* <sup>55</sup>Fe soft x-ray exposures.
 * Simulated star images (not fully implemented).
 
 # Dependencies
