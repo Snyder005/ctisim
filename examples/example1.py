@@ -2,10 +2,10 @@
 """example1.py
 
 This script is a worked example of simulating the serial readout
-of a flat field exposure, with proportional loss from charge transfer
+of a flat field segment image, with proportional loss from charge transfer
 inefficiency (CTI) occuring at every pixel transfer.
 
-To run this script write,
+To run this script, write
 
     python example1.py <cti>
 
@@ -19,8 +19,8 @@ The demonstrated class usages are:
 This example makes use of the `ITL_AMP_GEOM` utility dictionary,
 which contains all the necessary pixel geometry information 
 corresponding to an ITL CCD segment.
-
 """
+
 from ctisim import ITL_AMP_GEOM
 from ctisim import SegmentSimulator, SerialRegister, ReadoutAmplifier
 from ctisim.utils import calculate_cti
