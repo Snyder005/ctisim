@@ -12,9 +12,9 @@ To run this script, write
 where <cti> is the desired value for CTI.
 
 The demonstrated class usages are:
-    * SegmentSimulator: simulation of a segment image.
-    * SerialRegister: object encapsulating the serial register.
-    * ReadoutAmplifier: object encapsulting the output amplifier.
+    * SegmentSimulator(shape, num_serial_prescan)
+    * SerialRegister(length, cti)
+    * ReadoutAmplifier(noise)
 
 This example makes use of the `ITL_AMP_GEOM` utility dictionary,
 which contains all the necessary pixel geometry information 
@@ -37,27 +37,25 @@ def main(cti):
     # Create a SerialRegister object with the desired CTI value.
     # The length of the register will be the segment columns
     # plus any additional physical prescan pixels.
-    l = segment.ncols + segment.num_serial_prescan
-    serial_register = SerialRegister(l, cti)
+    length = segment.ncols + segment.num_serial_prescan
+    serial_register = SerialRegister(length, cti)
 
     # Create a ReadoutAmplifier object with 6.5 electrons of noise.
-    output_amp = ReadoutAmplifier(6.5)
+    readout_amplifier = ReadoutAmplifier(6.5)
 
     # The `serial_readout()` method creates the final image.
-    seg_imarr = output_amp.serial_readout(segment, serial_register,
-                                          num_serial_overscan=10)
+    seg_imarr = readout_amplifier.serial_readout(segment, serial_register,
+                                                 num_serial_overscan=10)
 
     ## Calculate CTI using the `calculate_cti()` utility function.
     last_pix_num = ITL_AMP_GEOM['last_pixel_index']
-    result = calculate_cti(seg_imarr, last_pix_num,
-                           num_overscan_pixels=2)
+    result = calculate_cti(seg_imarr, last_pix_num, num_overscan_pixels=2)
     print(result)
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Demonstrate CTI calculation')
-    parser.add_argument('cti', type=float, 
-                        help='Proportional loss from CTI.')
+    parser.add_argument('cti', type=float, help='Proportional loss from CTI.')
     args = parser.parse_args()
 
     cti = args.cti
