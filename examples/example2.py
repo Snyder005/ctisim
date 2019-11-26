@@ -19,7 +19,8 @@ in true LSST image FITs files.  An example ITL image file is proved:
     ITL_image_example.fits
 
 The new class usages demonstrated are:
-    * ImageSimulator: simulation of a full CCD image.
+    * ImageSimulator(shape, num_serial_prescan, num_serial_overscan, 
+                     num_parallel_overscan, readout_amplifiers, serial_registers)
 
 The ImageSimulator class serves as a broader class to hold the necessary
 objects and attributes for each of the 16 segments in an LSST CCD.  Within
@@ -39,7 +40,7 @@ def main(template_file, cti, signal, output_dir='./'):
     # For now they will all be the same.
     l = ITL_AMP_GEOM['ncols'] + ITL_AMP_GEOM['num_serial_prescan']
     readout_amplifiers = {amp : ReadoutAmplifier(6.5) for amp in range(1, 17)}
-    serial_registers = {amp : SerialRegister(l, cti) for amp in range(1, 17)}
+    serial_registers = {amp : SerialRegister(l, cti=cti) for amp in range(1, 17)}
 
     # Create an ImageSimulator object given amplifier geometry dictionary and
     # dictionaries containing the ReadoutAmplifier and SerialRegister objects.
@@ -58,8 +59,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Simulate an LSST flat field image.')
     parser.add_argument('template_file', type=str, 
                         help='Path to existing ITL CCD FITs file.')
-    parser.add_argument('cti', type=float,
-                        help='Proportional loss from CTI.')
+    parser.add_argument('cti', type=float, help='Proportional loss from CTI.')
     parser.add_argument('signal', type=float, help='Flat field illumination signal [e-]')
     parser.add_argument('--output_dir', '-o', type=str, default='./',
                         help='Directory for output files.')
@@ -71,5 +71,3 @@ if __name__ == '__main__':
     output_dir = args.output_dir
 
     main(template_file, cti, signal, output_dir=output_dir)
-
-    
