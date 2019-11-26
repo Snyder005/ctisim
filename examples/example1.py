@@ -3,7 +3,7 @@
 
 This script is a worked example of simulating the serial readout
 of a flat field segment image, with proportional loss from charge transfer
-inefficiency (CTI) occuring at every pixel transfer.
+inefficiency (CTI) occuring at each pixel transfer.
 
 To run this script, write
 

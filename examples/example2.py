@@ -2,13 +2,29 @@
 """example2.py
 
 This script is a worked example of creating a simulated flat field ITL CCD image.
+Proportional loss from CTI occuring at each pixel transfer is simulated.
 
 To run this script, write
 
-    python example2.py <template_file> <cti> <signal>
+    python example2.py <template_file> <cti> <signal> --output_dir <output_dir>
 
-where <template_file> is the path to an existing ITL CCD image.  This is necessary
-to capture all of the image metadata contained in the FITs files.  
+where <template_file> is the path to an existing ITL CCD image, <cti> is the 
+desired value for CTI, and <signal> is the desired flat field signal.  An 
+optional argument, <output_dir>, can be provided for a path to a desired directory
+to output the resulting files.
+   
+A template file is necessary to capture all of the image metadata contained 
+in true LSST image FITs files.  An example ITL image file is proved:
+     
+    ITL_image_example.fits
+
+The new class usages demonstrated are:
+    * ImageSimulator: simulation of a full CCD image.
+
+The ImageSimulator class serves as a broader class to hold the necessary
+objects and attributes for each of the 16 segments in an LSST CCD.  Within
+the class, SegmentSimulator objects are constructed and used to simulate
+the serial readout for each segment individually.  
 """
 import argparse
 from astropy.io import fits
