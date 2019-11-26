@@ -7,15 +7,12 @@ from astropy.io import fits
 class SerialTrap:
     """Represents a serial register trap."""
     
-    def __init__(self, density_factor, emission_time, trap_size, locations):
+    def __init__(self, density_factor, emission_time, trap_size, location):
         
         self.density_factor = density_factor
         self.emission_time = emission_time
         self.trap_size = trap_size
-
-        if not isinstance(locations, list):
-            locations = [locations]
-        self.locations = locations
+        self.location = location
 
 class SerialRegister:
     """Object representing a serial register of a segment."""
@@ -39,11 +36,10 @@ class SerialRegister:
     def add_trap(self, trap):
         """Add charge trapping to trap locations in serial register."""
                     
-        for l in trap.locations:
-            if l < self.length:
-                self.serial_register[l] = trap.trap_size
-            else:
-                raise ValueError("Serial trap locations must be less than {0}".format(self.length))
+        if trap.location < self.length:
+            self.serial_register[trap.location] = trap.trap_size
+        else:
+            raise ValueError("Serial trap locations must be less than {0}".format(self.length))
         self.trap = trap
                 
     def make_readout_array(self, nrows):
@@ -125,6 +121,7 @@ class ReadoutAmplifier:
             transferred_charge = free_charge*cte
             deferred_charge = free_charge*cti
             
+            ## Perform readout (with optional bias drift)
             if self.do_bias_drift:
                 new_drift = np.maximum(self.drift_size*(transferred_charge[:, 0]-self.drift_threshold), np.zeros(nrows))
                 drift = np.maximum(new_drift, drift*np.exp(-1/self.drift_tau))                
@@ -204,20 +201,6 @@ class SegmentSimulator:
             x0 = np.random.randint(self.num_serial_prescan,
                                    self.ncols+self.num_serial_prescan-sx)
 
-            self._imarr[y0:y0+sy, x0:x0+sx] += stamp
-            
-    def star_exp(self, num_stars, flux, psf_fwhm, stamp_length=40, random_seed=None):
-        """Simulate an exposure of a random star field."""
-        
-        for i in range(num_stars):
-            
-            stamp = self.sim_star(flux, psf_fwhm, stamp_length=stamp_length, random_seed=random_seed).array
-            sy, sx = stamp.shape
-            
-            y0 = np.random.randint(0, self.nrows-sy)
-            x0 = np.random.randint(self.num_serial_prescan,
-                                   self.ncols+self.num_serial_prescan-sx)
-            
             self._imarr[y0:y0+sy, x0:x0+sx] += stamp
         
     @staticmethod
