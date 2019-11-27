@@ -245,7 +245,7 @@ class SegmentSimulator:
             amp_geom ('dict' of 'int'): Parameters defining geometry of a segment.
 
         Returns:
-            SegmentSimulator
+            SegmentSimulator.
         """
         num_serial_prescan = amp_geom['num_serial_prescan']
         nrows = amp_geom['nrows']
@@ -408,7 +408,20 @@ class SegmentSimulator:
         return stamp
 
 class ImageSimulator:
-    """Represent an 16-channel LSST image."""
+    """Represent an 16-channel LSST image.
+
+    Attributes:
+        nrows (int): Number of rows.
+        ncols (int): Number of columns.
+        num_serial_overscan (int): Number of serial overscan pixels.
+        num_parallel_overscan (int): Number of parallel overscan pixels.
+        readout_amplifiers ('dict' of 'ReadoutAmplifier'): Dictionary
+            of ReadoutAmplifier objects for each segment.
+        serial_registers ('dict' of 'SerialRegister'): Dictionary
+            of SerialRegister objects for each segment.
+        segments ('dict' of 'SegmentSimulator'): Dictionary
+            of SegmentSimulator objects for each segment.
+    """
     
     def __init__(self, shape, num_serial_prescan, num_serial_overscan, 
                  num_parallel_overscan, readout_amplifiers, serial_registers):
@@ -419,12 +432,22 @@ class ImageSimulator:
         self.readout_amplifiers = readout_amplifiers
         self.serial_registers = serial_registers
 
-        self.amps = {i : SegmentSimulator(shape, num_serial_prescan) for i in range(1, 17)}
+        self.segments = {i : SegmentSimulator(shape, num_serial_prescan) for i in range(1, 17)}
         
     @classmethod
     def from_amp_geom(cls, amp_geom, readout_amplifiers, serial_registers):
-        """Initialize an ImageSimulator object from amplifier geometry dictionary."""
-        
+        """Initialize an ImageSimulator object from amplifier geometry dictionary.
+
+        Args:
+            amp_geom ('dict' of 'int'): Parameters defining geometry of a segment. 
+            readout_amplifiers ('dict' of 'ReadoutAmplifier'): Dictionary
+                of ReadoutAmplifier objects for each segment.
+            serial_registers ('dict' of 'SerialRegister'): Dictionary
+                of SerialRegister objects for each segment.
+
+        Returns:
+            ImageSimulator.
+        """
         nrows = amp_geom['nrows']
         ncols = amp_geom['ncols']
         num_serial_prescan = amp_geom['num_serial_prescan']
@@ -434,31 +457,64 @@ class ImageSimulator:
         return cls((nrows, ncols), num_serial_prescan, num_serial_overscan, 
                    num_parallel_overscan, readout_amplifiers, serial_registers)
         
-    def flatfield_exp(self, flux, noise=True):
-        """Simulate a flat field exposure."""
-        
+    def flatfield_exp(self, signal, noise=True):
+        """Simulate a flat field exposure.
+
+        This method simulates a flat field CCD image with given signal level.
+        The simulated image can be generated with or with out shot noise.
+
+        Args:
+            signal (float): Signal level of the flat field.
+            noise (bool): Specifies inclusion of shot noise.
+        """
         for i in range(1, 17):            
-            self.amps[i].flatfield_exp(flux, noise=noise)
+            self.segments[i].flatfield_exp(signal, noise=noise)
 
     def fe55_exp(self, num_fe55_hits, stamp_length=6, psf_fwhm=0.00016, 
                  hit_flux=1620, hit_hlr=0.004):
-        """Simulate an Fe55 exposure."""
-        
-        for i in range(1, 17):
-            self.amps[i].fe55_exp(num_fe55_hits, stamp_length=stamp_length, 
-                                  random_seed=None, psf_fwhm=psf_fwhm, 
-                                  hit_flux=hit_flux, hit_hlr=hit_hlr)
-            
-    def serial_readout(self, template_file, bitpix=32, 
-                       outfile='simulated_image.fits', **kwds):
+        """Simulate an Fe55 exposure.
 
+        This method simulates a Fe55 soft x-ray CCD image using the Galsim module.  
+        Fe55 x-ray hits are randomly generated as postage stamps and positioned 
+        randomly on each of the segment images.
+
+        Args:
+            num_fe55_hits (int): Number of Fe55 x-ray hits to perform.
+            stamp_length (int): Side length of desired Fe55 postage stamp.
+            random_seed (float): Random number generator seed.
+            psf_fwhm (float): FWHM of sensor PSF.
+            hit_flux (int): Total flux per Fe55 x-ray hit.
+            hit_hlr (float): Half-light radius of Fe55 x-ray hits.
+        """
+        for i in range(1, 17):
+            self.segments[i].fe55_exp(num_fe55_hits, stamp_length=stamp_length, 
+                                      random_seed=None, psf_fwhm=psf_fwhm, 
+                                      hit_flux=hit_flux, hit_hlr=hit_hlr)
+            
+    def serial_readout(self, template_file, bitpix=32, outfile='simulated_image.fits', **kwds):
+        """Perform the serial readout of all CCD segments.
+
+        This method simulates the serial readout for each segment of the CCD,
+        in accordance to each segments ReadoutAmplifier and SerialRegister objects.
+        Using a provided template file, an output file is generated that matches
+        existing FITs image files.
+
+        Args:
+            template_file (str): Filepath to existing FITs file to use as template.
+            bitpix (int): Representation of output array data type.
+            outfile (str): Filepath for desired output data file.
+            kwds ('dict'): Keyword arguments for Astropy `HDUList.writeto()`.
+
+        Returns:
+            List of NumPy arrays.
+        """
         output = fits.HDUList()
         output.append(fits.PrimaryHDU())
         
         imarr_list = []
         for i in range(1, 17):
             
-            im = self.readout_amplifiers[i].serial_readout(self.amps[i], self.serial_registers[i],
+            im = self.readout_amplifiers[i].serial_readout(self.segments[i], self.serial_registers[i],
                                                            num_serial_overscan=self.num_serial_overscan, 
                                                            num_parallel_overscan=self.num_parallel_overscan)
             imarr_list.append(im)
@@ -478,6 +534,12 @@ class ImageSimulator:
     
     @staticmethod
     def set_bitpix(hdu, bitpix):
+        """Set desired data type (bitpix) for HDU image array.
+
+        Args:
+            hdu (fits.ImageHDU): ImageHDU to modify.
+            bitpix (int): Representation of data type.
+        """
         dtypes = {16: np.int16, -32: np.float32, 32: np.int32}
         for keyword in 'BSCALE BZERO'.split():
             if keyword in hdu.header:
