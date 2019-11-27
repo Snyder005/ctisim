@@ -411,16 +411,18 @@ class ImageSimulator:
     """Represent an 16-channel LSST image."""
     
     def __init__(self, shape, num_serial_prescan, num_serial_overscan, 
-                 num_parallel_overscan, readout_amplifiers):
+                 num_parallel_overscan, readout_amplifiers, serial_registers):
         
+        self.nrows, ncols = shape
         self.num_serial_overscan = num_serial_overscan
         self.num_parallel_overscan = num_parallel_overscan
         self.readout_amplifiers = readout_amplifiers
+        self.serial_registers = serial_registers
 
         self.amps = {i : SegmentSimulator(shape, num_serial_prescan) for i in range(1, 17)}
         
     @classmethod
-    def from_amp_geom(cls, amp_geom, readout_amplifiers):
+    def from_amp_geom(cls, amp_geom, readout_amplifiers, serial_registers):
         """Initialize an ImageSimulator object from amplifier geometry dictionary."""
         
         nrows = amp_geom['nrows']
@@ -430,7 +432,7 @@ class ImageSimulator:
         num_parallel_overscan = amp_geom['num_parallel_overscan']
         
         return cls((nrows, ncols), num_serial_prescan, num_serial_overscan, 
-                   num_parallel_overscan, readout_amplifiers)
+                   num_parallel_overscan, readout_amplifiers, serial_registers)
         
     def flatfield_exp(self, flux, noise=True):
         """Simulate a flat field exposure."""
@@ -447,7 +449,7 @@ class ImageSimulator:
                                   random_seed=None, psf_fwhm=psf_fwhm, 
                                   hit_flux=hit_flux, hit_hlr=hit_hlr)
             
-    def serial_readout(self, template_file, serial_registers, bitpix=32, 
+    def serial_readout(self, template_file, bitpix=32, 
                        outfile='simulated_image.fits', **kwds):
 
         output = fits.HDUList()
@@ -456,7 +458,7 @@ class ImageSimulator:
         imarr_list = []
         for i in range(1, 17):
             
-            im = self.readout_amplifiers[i].serial_readout(self.amps[i], serial_register[i],
+            im = self.readout_amplifiers[i].serial_readout(self.amps[i], self.serial_registers[i],
                                                            num_serial_overscan=self.num_serial_overscan, 
                                                            num_parallel_overscan=self.num_parallel_overscan)
             imarr_list.append(im)
