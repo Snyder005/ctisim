@@ -5,7 +5,14 @@ import copy
 from astropy.io import fits
 
 class SerialTrap:
-    """Represents a serial register trap."""
+    """Represents a serial register trap.
+
+    Attributes:
+        density_factor (float): Fraction of pixel signal exposed to trap.
+        emission_time (float): Trap emission time constant [1/transfers].
+        trap_size (float): Size of charge trap [e-].
+        location (int): Serial pixel location of trap.
+    """
     
     def __init__(self, density_factor, emission_time, trap_size, location):
         
@@ -15,7 +22,14 @@ class SerialTrap:
         self.location = location
 
 class SerialRegister:
-    """Object representing a serial register of a segment."""
+    """Object representing a serial register of a segment.
+
+    Attributes:
+        length (int): Length of serial register [pixels].
+        trap (SerialTrap, optional): Serial register trap.
+        cti (float, optional): Value of proportional loss due to CTI.
+        serial_register (numpy.array): Array holding charge trap values.
+    """
     
     def __init__(self, length, cti=0.0, trap=None):
         
@@ -34,8 +48,17 @@ class SerialRegister:
         raise NotImplementedError
         
     def add_trap(self, trap):
-        """Add charge trapping to trap locations in serial register."""
-                    
+        """Add charge trapping to trap locations in serial register.
+
+        This method checks that the SerialTrap is compliant, before adding
+        to the charge trapping array.
+
+        Args:
+            trap (SerialTrap): SerialTrap to add to serial register.
+
+        Raises:
+            ValueError: If trap location is outside serial register dimensions.
+        """         
         if trap.location < self.length:
             self.serial_register[trap.location] = trap.trap_size
         else:
@@ -43,13 +66,34 @@ class SerialRegister:
         self.trap = trap
                 
     def make_readout_array(self, nrows):
-            
+        """Create tiled charge trapping array.
+
+        This method extends the charge trapping array along the y-direction
+        for use in serial readout of a segment image. This is to facilitate
+        performing serial transfer operations on every row of the image at once.
+
+        Args:
+            nrows (int): Length of y-dimension to tile charge trapping array.
+
+        Returns:
+            NumPy array.
+        """
         trap_array = np.tile(self.serial_register, (nrows, 1))
         
         return trap_array
 
 class ReadoutAmplifier:
-    """Object representing the readout amplifier of a single channel."""
+    """Object representing the readout amplifier of a single channel.
+
+    Attributes:
+        noise (float): Value of read noise [e-].
+        offset (float): Bias offset level [e-].
+        gain (float): Value of amplifier gain [e-/ADU].
+        do_bias_drift (bool): Specifies inclusion of bias drift.
+        drift_size (float): Strength of bias drift exponential.
+        drift_tau (float): Decay time constant for bias drift.
+        drift_threshold (float): Cut-off threshold for bias drift.
+    """
     
     def __init__(self, noise, gain=1.0, offset=0.0, biasdrift_params=None):
         
@@ -63,8 +107,20 @@ class ReadoutAmplifier:
     
     @classmethod
     def from_eotest_results(cls, eotest_results, offsets=None):
-        """Initialize ReadoutAmplifier objects from eotest results."""
-        
+        """Initialize a dictionary of ReadoutAmplifier objects from eotest results.
+
+        This method is a convenience function for initializing a series of 
+        ReadoutAmplifier objects from existing electro-optical test results.
+        The appropriate segment gain and read noise values are taken from
+        the test results and used to create each ReadoutAmplifier.
+
+        Args:
+            eotest_results (str): FITs file containing sensor eotest results.
+            offsets ('dict' of 'float'): Dictionary of bias offset levels.
+
+        Returns:
+            Dictionary of 'ReadoutAmplifier' objects.
+        """
         if offsets is None:
             offsets = {amp : 0.0 for amp in range(1, 17)}
             
@@ -83,16 +139,38 @@ class ReadoutAmplifier:
         return readout_amps
     
     def add_bias_drift(self, bias_drift_params):
-        """Add parameters for bias drift."""
-        
+        """Add parameters for bias drift.
+
+        This method sets the parameters to perform bias drifting during
+        serial readout.
+
+        Args:
+            bias_drift_params ('tuple' of 'float'): Bias drift parameters.
+        """
         self.drift_size = bias_drift_params[0]
         self.drift_tau = bias_drift_params[1]
         self.drift_threshold = bias_drift_params[2]
         self.do_bias_drift = True
                 
-    def serial_readout(self, segment, serial_register, num_serial_overscan=10, num_parallel_overscan=0):
-        """Simulate serial readout of the segment image."""
-        
+    def serial_readout(self, segment, serial_register, num_serial_overscan=10, 
+                       num_parallel_overscan=0):
+        """Simulate serial readout of the segment image.
+
+        This method performs the serial readout of a segment image given the
+        appropriate SerialRegister object and the properties of the ReadoutAmplifier.
+        Additional arguments can be provided to account for the number of 
+        desired overscan transfers  The result is a simulated final segment image,
+        in ADU.
+
+        Args:
+            segment (SegmentSimulator): Simulated segment image to process.
+            serial_register (SerialRegister): Serial register to use during readout.
+            num_serial_overscan (int): Number of serial overscan pixels.
+            num_parallel_overscan (int): Number of parallel overscan pixels.
+
+        Returns:
+            NumPy array.
+        """
         nrows = segment.nrows
         ncols = segment.ncols + segment.num_serial_prescan
         iy, ix = nrows, ncols+num_serial_overscan
@@ -139,6 +217,14 @@ class ReadoutAmplifier:
         return image/float(self.gain)
 
 class SegmentSimulator:
+    """Controls the creation of simulated segment images.
+
+    Attributes:
+        nrows (int): Number of rows.
+        ncols (int): Number of columns.
+        num_serial_prescan (int): Number of serial prescan pixels.
+        image (numpy.array): NumPy array containg the image pixels.
+    """
 
     def __init__(self, shape, num_serial_prescan):
 
@@ -149,8 +235,18 @@ class SegmentSimulator:
         
     @classmethod
     def from_amp_geom(cls, amp_geom):
-        """Initialize a SegmentSimulator object from a amp geometry dictionary."""
-        
+        """Initialize a SegmentSimulator object from a amp geometry dictionary.
+
+        This method is a convenience function to initialize a SegmentSimulator
+        object from a dictionary containing the necessary segment geometry
+        information.
+
+        Args:
+            amp_geom ('dict' of 'int'): Parameters defining geometry of a segment.
+
+        Returns:
+            SegmentSimulator
+        """
         num_serial_prescan = amp_geom['num_serial_prescan']
         nrows = amp_geom['nrows']
         ncols = amp_geom['ncols']
@@ -169,28 +265,57 @@ class SegmentSimulator:
         self._imarr = np.zeros((self.nrows, self.ncols+self.num_serial_prescan), 
                                dtype=np.float32)
         
-    def ramp_exp(self, flux_list):
-        """Simulate an image with varying flux illumination per row."""
-        
+    def ramp_exp(self, signal_list):
+        """Simulate an image with varying flux illumination per row.
+
+        This method simulates a segment image where the signal level increases
+        along the horizontal direction, according to the provided list of
+        signal levels.
+
+        Args:
+            signal_list ('list' of 'float'): List of signal levels.
+
+        Raises:
+            ValueError: If number of signal levels does not equal the number of rows.
+        """
         if len(flux_list) != self.nrows:
             raise ValueError
             
         ramp = np.tile(flux_list, (self.ncols, 1)).T
         self._imarr[:, self.num_serial_prescan:] += ramp
         
-    def flatfield_exp(self, flux, noise=True):
-        """Simulate a flat field exposure."""
+    def flatfield_exp(self, signal, noise=True):
+        """Simulate a flat field exposure.
 
+        This method simulates a flat field segment image with given signal level.
+        The simulated image can be generated with or with out shot noise.
+
+        Args:
+            signal (float): Signal level of the flat field.
+            noise (bool): Specifies inclusion of shot noise.
+        """
         if noise:
-            flat = np.random.poisson(flux, size=(self.nrows, self.ncols))
+            flat = np.random.poisson(signal, size=(self.nrows, self.ncols))
         else:
-            flat = np.ones((self.nrows, self.ncols))*flux
+            flat = np.ones((self.nrows, self.ncols))*signal
         self._imarr[:, self.num_serial_prescan:] += flat
 
     def fe55_exp(self, num_fe55_hits, stamp_length=6, random_seed=None, psf_fwhm=0.00016, 
                  hit_flux=1620, hit_hlr=0.004):
-        """Simulate an Fe55 exposure."""
+        """Simulate an Fe55 exposure.
 
+        This method simulates a Fe55 soft x-ray segment image using the Galsim module.  
+        Fe55 x-ray hits are randomly generated as postage stamps and positioned 
+        randomly on the segment image.
+
+        Args:
+            num_fe55_hits (int): Number of Fe55 x-ray hits to perform.
+            stamp_length (int): Side length of desired Fe55 postage stamp.
+            random_seed (float): Random number generator seed.
+            psf_fwhm (float): FWHM of sensor PSF.
+            hit_flux (int): Total flux per Fe55 x-ray hit.
+            hit_hlr (float): Half-light radius of Fe55 x-ray hits.
+        """
         for i in range(num_fe55_hits):
             
             stamp = self.sim_fe55_hit(random_seed=random_seed, stamp_length=stamp_length,
@@ -206,7 +331,22 @@ class SegmentSimulator:
     @staticmethod
     def sim_fe55_hit(random_seed=None, stamp_length=6, psf_fwhm=0.00016,
                      hit_flux=1620, hit_hlr=0.004):
-        """Simulate an Fe55 postage stamp."""
+        """Simulate an Fe55 postage stamp.
+
+        A single Fe55 x-ray hit is simulated using Galsim.  This simulates
+        charge spreading due to sensor effects (the sensor PSF).  The
+        result is a postage stamp containing the Fe55 x-ray hit.
+
+        Args:
+            random_seed (float): Random number generator seed.
+            stamp_length (int): Side length of desired Fe55 postage stamp.
+            psf_fwhm (float): FWHM of sensor PSF.
+            hit_flux (int): Total flux per Fe55 x-ray hit.
+            hit_hlr (float): Half-light radius of Fe55 x-ray hits.
+
+        Returns:
+            NumPy array.
+        """
         
         ## Set image parameters
         pixel_scale = 0.2
