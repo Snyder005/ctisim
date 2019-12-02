@@ -544,6 +544,15 @@ class ImageSimulator:
         return segarr_dict
 
     def segment_readout(self, segarr_dict, amp):
+        """Simulate readout of a single segment.
+
+        This method is to facilitate the use of multiprocessing when reading out 
+        an entire image (16 segments). 
+
+        Args:
+            segarr_dict ('dict' of 'numpy.array'): Dictionary of array results.
+            amp (int): Amplifier number.
+        """
 
         im = self.readout_amplifiers[amp].serial_readout(self.segments[amp], self.serial_registers[amp],
                                                          num_serial_overscan=self.num_serial_overscan,
