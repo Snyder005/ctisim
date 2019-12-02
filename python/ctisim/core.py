@@ -5,8 +5,6 @@ import copy
 import multiprocessing as mp
 from astropy.io import fits
 
-import time # debug
-
 class SerialTrap:
     """Represents a serial register trap.
 
@@ -281,10 +279,10 @@ class SegmentSimulator:
         Raises:
             ValueError: If number of signal levels does not equal the number of rows.
         """
-        if len(flux_list) != self.nrows:
+        if len(signal_list) != self.nrows:
             raise ValueError
             
-        ramp = np.tile(flux_list, (self.ncols, 1)).T
+        ramp = np.tile(signal_list, (self.ncols, 1)).T
         self._imarr[:, self.num_serial_prescan:] += ramp
         
     def flatfield_exp(self, signal, noise=True):
@@ -494,7 +492,8 @@ class ImageSimulator:
                                       random_seed=None, psf_fwhm=psf_fwhm, 
                                       hit_flux=hit_flux, hit_hlr=hit_hlr)
             
-    def serial_readout(self, template_file, bitpix=32, outfile='simulated_image.fits', **kwds):
+    def serial_readout(self, template_file, bitpix=32, outfile='simulated_image.fits', 
+                       do_multiprocessing=False, **kwds):
         """Perform the serial readout of all CCD segments.
 
         This method simulates the serial readout for each segment of the CCD,
@@ -506,6 +505,7 @@ class ImageSimulator:
             template_file (str): Filepath to existing FITs file to use as template.
             bitpix (int): Representation of output array data type.
             outfile (str): Filepath for desired output data file.
+            do_multiprocessing (bool): Specifies usage of multiprocessing module.
             kwds ('dict'): Keyword arguments for Astropy `HDUList.writeto()`.
 
         Returns:
@@ -515,7 +515,6 @@ class ImageSimulator:
         output.append(fits.PrimaryHDU())
 
         ## Segment readout using single or multiprocessing
-        do_multiprocessing = kwds.pop('do_muliprocessing', False)
         if do_multiprocessing:
             manager = mp.Manager()
             segarr_dict = manager.dict()
