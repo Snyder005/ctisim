@@ -2,6 +2,7 @@ import galsim
 import numpy as np
 import os
 import copy
+import multiprocessing as mp
 from astropy.io import fits
 
 class SerialTrap:
@@ -278,10 +279,10 @@ class SegmentSimulator:
         Raises:
             ValueError: If number of signal levels does not equal the number of rows.
         """
-        if len(flux_list) != self.nrows:
+        if len(signal_list) != self.nrows:
             raise ValueError
             
-        ramp = np.tile(flux_list, (self.ncols, 1)).T
+        ramp = np.tile(signal_list, (self.ncols, 1)).T
         self._imarr[:, self.num_serial_prescan:] += ramp
         
     def flatfield_exp(self, signal, noise=True):
@@ -491,7 +492,8 @@ class ImageSimulator:
                                       random_seed=None, psf_fwhm=psf_fwhm, 
                                       hit_flux=hit_flux, hit_hlr=hit_hlr)
             
-    def serial_readout(self, template_file, bitpix=32, outfile='simulated_image.fits', **kwds):
+    def serial_readout(self, template_file, bitpix=32, outfile='simulated_image.fits', 
+                       do_multiprocessing=False, **kwds):
         """Perform the serial readout of all CCD segments.
 
         This method simulates the serial readout for each segment of the CCD,
@@ -503,6 +505,7 @@ class ImageSimulator:
             template_file (str): Filepath to existing FITs file to use as template.
             bitpix (int): Representation of output array data type.
             outfile (str): Filepath for desired output data file.
+            do_multiprocessing (bool): Specifies usage of multiprocessing module.
             kwds ('dict'): Keyword arguments for Astropy `HDUList.writeto()`.
 
         Returns:
@@ -510,27 +513,51 @@ class ImageSimulator:
         """
         output = fits.HDUList()
         output.append(fits.PrimaryHDU())
-        
-        imarr_list = []
-        for i in range(1, 17):
-            
-            im = self.readout_amplifiers[i].serial_readout(self.segments[i], self.serial_registers[i],
-                                                           num_serial_overscan=self.num_serial_overscan, 
-                                                           num_parallel_overscan=self.num_parallel_overscan)
-            imarr_list.append(im)
-            output.append(fits.ImageHDU(data=im/self.readout_amplifiers[i].gain))
 
+        ## Segment readout using single or multiprocessing
+        if do_multiprocessing:
+            manager = mp.Manager()
+            segarr_dict = manager.dict()
+            job = [mp.Process(target=self.segment_readout, 
+                              args=(segarr_dict, amp)) for amp in range(1, 17)]
+
+            _ = [p.start() for p in job]
+            _ = [p.join() for p in job]
+
+        else:
+            segarr_dict = {}
+            for amp in range(1, 17):
+                self.segment_readout(segarr_dict, amp)
+
+        ## Write results to FITs file
         with fits.open(template_file) as template:
             output[0].header.update(template[0].header)
             output[0].header['FILENAME'] = os.path.basename(outfile)
-            for i in range(1, 17):
-                output[i].header.update(template[i].header)
-                self.set_bitpix(output[i], bitpix)
+            for amp in range(1, 17):
+                imhdu = fits.ImageHDU(data=segarr_dict[amp], header=template[amp].header)
+                self.set_bitpix(imhdu, bitpix)
+                output.append(imhdu)
             for i in (-3, -2, -1):
                 output.append(template[i])
             output.writeto(outfile, **kwds)
             
-        return imarr_list
+        return segarr_dict
+
+    def segment_readout(self, segarr_dict, amp):
+        """Simulate readout of a single segment.
+
+        This method is to facilitate the use of multiprocessing when reading out 
+        an entire image (16 segments). 
+
+        Args:
+            segarr_dict ('dict' of 'numpy.array'): Dictionary of array results.
+            amp (int): Amplifier number.
+        """
+
+        im = self.readout_amplifiers[amp].serial_readout(self.segments[amp], self.serial_registers[amp],
+                                                         num_serial_overscan=self.num_serial_overscan,
+                                                         num_parallel_overscan=self.num_parallel_overscan)
+        segarr_dict[amp] = im
     
     @staticmethod
     def set_bitpix(hdu, bitpix):

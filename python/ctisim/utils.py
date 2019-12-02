@@ -15,7 +15,7 @@ E2V_AMP_GEOM = {'ncols' : 512,
                 'last_pixel_index' : 521}
 
 def calculate_cti(imarr, last_pix_num, num_overscan_pixels=1):
-    """Calute the serial CTI of an image array."""
+    """Calculate the serial CTI of an image array."""
     
     last_pix = np.mean(imarr[:, last_pix_num])
 
