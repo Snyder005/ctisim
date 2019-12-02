@@ -43,10 +43,35 @@ class SerialRegister:
             self.add_trap(trap)
        
     @classmethod
-    def from_mcmc_results(cls, mcmc_results, length, mean_func=np.mean, burnin=500):
-        """Initialize SerialRegister object from MCMC results file."""
+    def from_mcmc_results(cls, mcmc_results, length):
+        """Initialize SerialRegister object from MCMC results file.
 
-        raise NotImplementedError
+        This method is a convenience function for initializing a series of 
+        SerialRegister objects from existing MCMC optimization results.
+
+        Args:
+            mcmc_results (str): FITs file containing MCMC optimization results.
+            length (int): Length of serial register [pixels].
+        """
+        serial_registers = {}
+        with fits.open(mcmc_results) as hdulist:
+        
+            results = hdulist[1].data
+
+            for amp in range(1, 17):
+            
+                trapsize = results['TRAP_SIZE'][amp-1]
+                if trapsize > 0:
+                    trap = SerialTrap(results['TRAP_DFACTOR'][amp-1],
+                                      results['TRAP_TAU'][amp-1],
+                                      trapsize,
+                                      1)
+                else:
+                    trap = None
+                serial_registers[amp] = cls(length, cti=results['CTI'][amp-1],
+                                            trap=trap)
+
+        return serial_registers
         
     def add_trap(self, trap):
         """Add charge trapping to trap locations in serial register.
@@ -107,7 +132,7 @@ class ReadoutAmplifier:
             self.add_bias_drift(biasdrift_params)
     
     @classmethod
-    def from_eotest_results(cls, eotest_results, offsets=None):
+    def from_eotest_results(cls, eotest_results, mcmc_results=None, offsets=None):
         """Initialize a dictionary of ReadoutAmplifier objects from eotest results.
 
         This method is a convenience function for initializing a series of 
@@ -117,14 +142,26 @@ class ReadoutAmplifier:
 
         Args:
             eotest_results (str): FITs file containing sensor eotest results.
+            mcmc_results (str): FITs file containing MCMC optimization results.
             offsets ('dict' of 'float'): Dictionary of bias offset levels.
 
         Returns:
             Dictionary of 'ReadoutAmplifier' objects.
         """
         if offsets is None:
-            offsets = {amp : 0.0 for amp in range(1, 17)}
+            offsets = {i : 0.0 for i in range(1, 17)}
+
+        ## Optionally add bias drift parameters
+        if mcmc_results is not None:
+            with fits.open(mcmc_results) as mcmc_hdulist:
+                data = mcmc_hdulist[1].data
+                biasdrift_params = {i+1 : (data['DRIFT_SIZE'][i], 
+                                      data['DRIFT_TAU'][i], 
+                                      data['DRIFT_THRESHOLD'][i]) for i in range(16)}
+        else:
+            biasdrift_params = {i : None for i in range(1, 17)}
             
+        ## Get read noise and gain from eotest results
         readout_amps = {}
         with fits.open(eotest_results) as hdulist:
             
@@ -134,7 +171,8 @@ class ReadoutAmplifier:
                 noise = hdulist[1].data['READ_NOISE'][ampno-1]
                 gain = hdulist[1].data['GAIN'][ampno-1]
                 
-                readout_amp = cls(noise, gain=gain, offset=offset)
+                readout_amp = cls(noise, gain=gain, offset=offset,
+                                  biasdrift_params = biasdrift_params[ampno])
                 readout_amps[ampno] = readout_amp
                 
         return readout_amps
