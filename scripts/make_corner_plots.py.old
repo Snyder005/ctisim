@@ -1,0 +1,37 @@
+from astropy.io import fits
+import numpy as np
+import corner
+import os
+import argparse
+
+def main(filename, sensor_id, burnin=50, output_dir='./'):
+    
+    hdulist = fits.open(filename)
+
+    for amp in range(1, 17):
+        amp_data = hdulist[amp].data
+    
+        results = amp_data[:, burnin:, :].reshape((-1, 4))
+
+#    results[:, 0] = 10**results[:, 0]
+
+        fig = corner.corner(results, 
+                            labels=["$log_{10}(\mathrm{CTI})$", "f", r"$\tau$", "S"])
+        fig.savefig(os.path.join(output_dir,
+                                 "{0}_amp{1:02d}_triangle.png".format(sensor_id, amp)))
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('filename', type=str)
+    parser.add_argument('sensor_id', type=str)
+    parser.add_argument('-b', '--burnin', type=int, default=50)
+    parser.add_argument('-o', '--output_dir', type=str, default='./')
+    args = parser.parse_args()
+
+    filename = args.filename
+    sensor_id = args.sensor_id
+    burnin = args.burnin
+    output_dir = args.output_dir
+
+    main(filename, sensor_id, burnin=burnin, output_dir=output_dir)
