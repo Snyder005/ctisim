@@ -32,19 +32,19 @@ from astropy.io import fits
 from os.path import join
 
 from ctisim import ITL_AMP_GEOM
-from ctisim import ReadoutAmplifier, SerialRegister, ImageSimulator
+from ctisim import OutputAmplifier, SerialRegister, ImageSimulator
 
 def main(template_file, cti, signal, output_dir='./'):
 
     # Each segment needs it out ReadoutAmplifier and SerialRegister object.
     # For now they will all be the same.
     l = ITL_AMP_GEOM['ncols'] + ITL_AMP_GEOM['num_serial_prescan']
-    readout_amplifiers = {amp : ReadoutAmplifier(6.5) for amp in range(1, 17)}
+    output_amplifiers = {amp : OutputAmplifier(6.5) for amp in range(1, 17)}
     serial_registers = {amp : SerialRegister(l, cti=cti) for amp in range(1, 17)}
 
     # Create an ImageSimulator object given amplifier geometry dictionary and
     # dictionaries containing the ReadoutAmplifier and SerialRegister objects.
-    imagesim = ImageSimulator.from_amp_geom(ITL_AMP_GEOM, readout_amplifiers,
+    imagesim = ImageSimulator.from_amp_geom(ITL_AMP_GEOM, output_amplifiers,
                                             serial_registers)
     imagesim.flatfield_exp(signal)
     

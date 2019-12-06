@@ -1,5 +1,5 @@
 from ctisim import ITL_AMP_GEOM
-from ctisim import SerialRegister, SerialTrap, ReadoutAmplifier, ImageSimulator
+from ctisim import SerialRegister, SerialTrap, OutputAmplifier, ImageSimulator
 from astropy.io import fits
 import numpy as np
 import argparse
@@ -16,11 +16,11 @@ def main(signal, eotest_results, mcmc_results, template_file, output_dir='./'):
     offsets = {i : np.random.normal(27000.0, 2000.0) for i in range(1, 17)}
 
     ## Initialize image simulator
-    readout_amps = ReadoutAmplifier.from_eotest_results(eotest_results, mcmc_results=mcmc_results, offsets=offsets)
+    output_amps = OutputAmplifier.from_eotest_results(eotest_results, mcmc_results=mcmc_results, offsets=offsets)
     
     for i in range(2):
 
-        imsim = ImageSimulator.from_amp_geom(amp_geom, readout_amps, serial_registers)
+        imsim = ImageSimulator.from_amp_geom(amp_geom, output_amps, serial_registers)
         imsim.flatfield_exp(signal)
 
         outfile = os.path.join(output_dir, 'Sim_flat_flat{0}_{1:0.1f}_sim.fits'.format(i, signal))

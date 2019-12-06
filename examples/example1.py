@@ -14,7 +14,7 @@ where <cti> is the desired value for CTI.
 The demonstrated class usages are:
     * SegmentSimulator(shape, num_serial_prescan)
     * SerialRegister(length, cti)
-    * ReadoutAmplifier(noise)
+    * OutputAmplifier(noise)
 
 This example makes use of the `ITL_AMP_GEOM` utility dictionary,
 which contains all the necessary pixel geometry information 
@@ -22,7 +22,7 @@ corresponding to an ITL CCD segment.
 """
 
 from ctisim import ITL_AMP_GEOM
-from ctisim import SegmentSimulator, SerialRegister, ReadoutAmplifier
+from ctisim import SegmentSimulator, SerialRegister, OutputAmplifier
 from ctisim.utils import calculate_cti
 import argparse
 
@@ -40,11 +40,11 @@ def main(cti):
     length = segment.ncols + segment.num_serial_prescan
     serial_register = SerialRegister(length, cti)
 
-    # Create a ReadoutAmplifier object with 6.5 electrons of noise.
-    readout_amplifier = ReadoutAmplifier(6.5)
+    # Create an OutputAmplifier object with 6.5 electrons of noise.
+    output_amplifier = OutputAmplifier(6.5)
 
     # The `serial_readout()` method creates the final image.
-    seg_imarr = readout_amplifier.serial_readout(segment, serial_register,
+    seg_imarr = output_amplifier.serial_readout(segment, serial_register,
                                                  num_serial_overscan=10)
 
     ## Calculate CTI using the `calculate_cti()` utility function.
