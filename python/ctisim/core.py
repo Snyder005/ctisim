@@ -12,6 +12,7 @@ class SegmentModelParams:
         self.drift_tau = np.nan
         self.drift_threshold = 0.0
         self.trap_size = 0.0
+        self.trap_location = np.nan
         self.density_factor = 0.0
         self.trap_tau = np.nan
         
@@ -26,9 +27,9 @@ class SegmentModelParams:
         self.walkers = walkers
         self.steps = steps
         self.cti = 10**np.median(mcmc_results[:, burn_in:, 0])
-        self.density_factor = np.median(mcmc_results[:, burnin:, 1])
-        self.trap_tau = np.median(mcmc_results[:, burnin:, 2])
-        self.trap_size = np.median(mcmc_results[:, burnin:, 3])
+        self.density_factor = np.median(mcmc_results[:, burn_in:, 1])
+        self.trap_tau = np.median(mcmc_results[:, burn_in:, 2])
+        self.trap_size = np.median(mcmc_results[:, burn_in:, 3])
 
         self.mcmc_results = mcmc_results
 
@@ -45,20 +46,27 @@ class SegmentModelParams:
                 self.drift_tau = param_results['drift_tau']
                 self.drift_threshold = param_results['drift_threshold']
             except KeyError:
+                self.drift_tau = np.nan
+                self.drift_threshold = 0.0
                 raise KeyError("Must include drift_tau and drift_threshold values " + \
                                "when updating drift_size.")
             else:
                 self.drift_size = param_results['drift_size']
 
-        ## These need to be conditional
+        ## Upate trap results
         if param_results.get('trap_size'):
-
             try:
+                self.trap_location = param_results['trap_location']
                 self.density_factor = param_results['density_factor']
                 self.trap_tau = param_results['trap_tau']
             except KeyError:
+                self.trap_location = np.nan
+                self.density_factor = 0.0
+                self.trap_tau = np.nan
                 raise KeyError("Must include density_factor and trap_tau values " + \
                                "when updating trap_size.")
+            else:
+                self.trap_size = param_results['trap_size']
 
     def create_table_hdu(self):
 
@@ -67,7 +75,7 @@ class SegmentModelParams:
         hdr['WALKERS'] = self.walkers
         hdr['STEPS'] = self.steps
 
-        results = self.mcmc_results.flatten() # see what error raised and add try/except
+        results = self.mcmc_results.reshape((-1, 4)) # see what error raised and add try/except
         cols = [fits.Column(name='CTIEXP', array=results[:, 0], format='E'),
                 fits.Column(name='TRAPSIZE', array=results[:, 3], format='E'),
                 fits.Column(name='TAU', array=results[:, 2], format='E'),
@@ -83,6 +91,10 @@ class SensorModelParams:
 
         self.segment_params = {i : SegmentModelParams(i) for i in range(1, 17)}
 
+    def add_segment_mcmc_results(self, amp, mcmc_results, burn_in=0):
+
+        self.segment_params[amp].add_mcmc_results(mcmc_results, burn_in=burn_in)
+
     def update_segment_params(self, amp, **param_results):
 
             self.segment_params[amp].update_params(**param_results)
@@ -90,6 +102,25 @@ class SensorModelParams:
     def write_fits(self, outfile, overwrite=True):
         
         prihdu = fits.PrimaryHDU()
+
+        cti_results = np.zeros(16)
+        drift_size_results = np.zeros(16)
+        drift_tau_results = np.zeros(16)
+        drift_threshold_results = np.zeros(16)
+        trap_size_results = np.zeros(16)
+        trap_tau_results = np.zeros(16)
+        dfactor_results = np.zeros(16)
+        location_results = np.zeros(16)
+
+        for i in range(16):
+            cti_results[i] = self.segment_params[i+1].cti
+            drift_size_results[i] = self.segment_params[i+1].drift_size
+            drift_tau_results[i] = self.segment_params[i+1].drift_tau
+            drift_threshold_results[i] = self.segment_params[i+1].drift_threshold
+            trap_size_results[i] = self.segment_params[i+1].trap_size
+            trap_tau_results[i] = self.segment_params[i+1].trap_tau
+            dfactor_results[i] = self.segment_params[i+1].density_factor
+            location_results[i] = self.segment_params[i+1].trap_location
         
         cols = [fits.Column(name='CTI', array=cti_results, format='E'),
                 fits.Column(name='DRIFT_SIZE', array=drift_size_results, format='E'),
@@ -97,7 +128,9 @@ class SensorModelParams:
                 fits.Column(name='DRIFT_THRESHOLD', array=drift_threshold_results, format='E'),
                 fits.Column(name='TRAP_SIZE', array=trap_size_results, format='E'),
                 fits.Column(name='TRAP_TAU', array=trap_tau_results, format='E'),
-                fits.Column(name='TRAP_DFACTOR', array=dfactor_results, format='E')]
+                fits.Column(name='TRAP_DFACTOR', array=dfactor_results, format='E'),
+                fits.Column(name='TRAP_LOCATION', array=location_results, format='E')]
+        print('test')
         hdu = fits.BinTableHDU.from_columns(cols)
         
         hdulist = fits.HDUList([prihdu, hdu])
