@@ -303,6 +303,7 @@ class OutputAmplifier:
             for ampno in range(1, 17):
                 
                 offset = offsets[ampno]
+                print(hdulist[1].data)
                 noise = hdulist[1].data['READ_NOISE'][ampno-1]
                 gain = hdulist[1].data['GAIN'][ampno-1]
                 
