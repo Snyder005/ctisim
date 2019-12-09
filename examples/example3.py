@@ -26,7 +26,7 @@ trapping on measurements of the CTI.  Recommended comparison:
 """
 
 from ctisim import ITL_AMP_GEOM
-from ctisim import SegmentSimulator, SerialRegister, ReadoutAmplifier, SerialTrap
+from ctisim import SegmentSimulator, SerialRegister, OutputAmplifier, SerialTrap
 from ctisim.utils import calculate_cti
 import argparse
 
@@ -49,12 +49,12 @@ def main(signal, cti, trap_size):
     serial_register = SerialRegister(length, cti=cti, trap=trap)
 
     # Create the output amplifier
-    readout_amplifier = ReadoutAmplifier(6.5)
+    output_amplifier = OutputAmplifier(6.5)
 
     # Simulate readout
     num_oscan = ITL_AMP_GEOM['num_serial_overscan']
-    seg_imarr = readout_amplifier.serial_readout(segment, serial_register,
-                                                 num_serial_overscan=num_oscan)
+    seg_imarr = output_amplifier.serial_readout(segment, serial_register,
+                                                num_serial_overscan=num_oscan)
 
     # Calculate CTI
     last_pix_num = ITL_AMP_GEOM['last_pixel_index']
