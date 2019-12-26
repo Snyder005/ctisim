@@ -1,6 +1,6 @@
 import numpy as np
 
-from ctisim import SerialTrap, SerialRegister, OutputAmplifier, SegmentSimulator
+from ctisim import SerialTrap, OutputAmplifier, SegmentSimulator
 
 class TrapModelFitting:
     """Object to control MCMC parameter fitting of a serial trapping model."""
@@ -31,11 +31,11 @@ class TrapModelFitting:
                       trap_locations, biasdrift_params=None):
         """Calculate log likelihood for model with given parameters."""
         
-        ctiexp, densityfactor, tau, trapsize = trap_params
+        ctiexp, scaling, emission_time, size = trap_params
         cti = 10.**ctiexp
-        model_params = [cti, densityfactor, tau, trapsize]
+        model_params = [cti, scaling, emission_time, size, 0.0]
         
-        start = self.amp_geom['num_serial_prescan'] + self.amp_geom['ncols']
+        start = self.amp_geom.prescan_width + self.amp_geom.nx
         stop = start+self.num_oscan_pixels
         model_rows = self.simplified_model(model_params, flux_array, trap_locations, 
                                            self.amp_geom, biasdrift_params=biasdrift_params)
@@ -59,24 +59,29 @@ class TrapModelFitting:
             return result
         
     @staticmethod
-    def simplified_model(trap_params, flux_array, trap_location, amp_geom, 
+    def simplified_model(trap_params, flux_array, pixel, amp_geom, 
                          biasdrift_params=None):
         """Generate simulated data for given serial trap parameters."""
     
-        cti, df, tau, trap_size = trap_params
+        nx = amp_geom.nx
+        prescan_width = amp_geom.prescan_width
+        serial_overscan_width = amp_geom.serial_overscan_width
+        parallel_overscan_width = 0
 
-        ncols = amp_geom['ncols']
-        num_serial_prescan = amp_geom['num_serial_prescan']
-        num_serial_overscan = amp_geom['num_serial_overscan']
-        num_parallel_overscan = 0
+        cti, scaling, emission_time, size, threshold = trap_params        
+        trap = SerialTrap(size, scaling, emission_time, threshold, pixel)
 
-        trap = SerialTrap(df, tau, trap_size, location=trap_location)
-        serial_register = SerialRegister(ncols+num_serial_prescan, cti, trap=trap)
-        output_amplifier = OutputAmplifier(0.0, gain=1.0, offset=0.0, 
-                                             biasdrift_params=biasdrift_params)
-        flat = SegmentSimulator((len(flux_array), ncols), num_serial_prescan)
+        if biasdrift_params is not None:
+            drift_scale, decay_time, drift_threshold = biasdrift_params
+            output_amplifier = OutputAmplifier(1.0, 0.0, offset=0.0, drift_scale=drift_scale,
+                                               decay_time=decay_time, threshold=drift_threshold)
+        else:
+            output_amplifier = OutputAmplifier(1.0, 0.0, offset=0.0)
+
+        imarr = np.zeros((len(flux_array), nx))
+        flat = SegmentSimulator(imarr, prescan_width, output_amplifier, cti=cti, traps=trap)
         flat.ramp_exp(flux_array)
 
-        return output_amplifier.serial_readout(flat, serial_register, 
-                                                num_serial_overscan=num_serial_overscan, 
-                                                num_parallel_overscan=num_parallel_overscan)
+        return flat.simulate_readout(serial_overscan_width=serial_overscan_width, 
+                                      parallel_overscan_width=parallel_overscan_width,
+                                      do_trapping=True, do_bias_drift=True)

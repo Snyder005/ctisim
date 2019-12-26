@@ -1,5 +1,5 @@
 from ctisim import ITL_AMP_GEOM
-from ctisim import SerialRegister, SerialTrap, OutputAmplifier, ImageSimulator
+from ctisim import SerialTrap, OutputAmplifier, ImageSimulator
 from astropy.io import fits
 import numpy as np
 import argparse
@@ -9,22 +9,23 @@ def main(signal, eotest_results, mcmc_results, template_file, output_dir='./'):
 
     amp_geom = ITL_AMP_GEOM
 
-    length = amp_geom['ncols'] + amp_geom['num_serial_prescan']
-    serial_registers = SerialRegister.from_mcmc_results(mcmc_results, length=length)
-    
-    ## Random offsets
-    offsets = {i : np.random.normal(27000.0, 2000.0) for i in range(1, 17)}
+    ## Noise and gain from eotest results
+    with fits.open(eotest_results) as hdulist:
+        data = hdulist[1].data
+        noise = data['TOTAL_NOISE']
+        gains = data['GAIN']
 
-    ## Initialize image simulator
-    output_amps = OutputAmplifier.from_eotest_results(eotest_results, mcmc_results=mcmc_results, offsets=offsets)
+    offsets = {i : np.random.normal(27000.0, 2000.0) for i in range(1, 17)}
+    output_amps = {i : OutputAmplifier(gains[i-1], noise[i-1], offsets[i]) for i in range(1, 17)}
     
     for i in range(2):
 
-        imsim = ImageSimulator.from_amp_geom(amp_geom, output_amps, serial_registers)
+        imsim = ImageSimulator.from_amp_geom(amp_geom, output_amps)
+        imsim.update_parameters(mcmc_results)
         imsim.flatfield_exp(signal)
 
         outfile = os.path.join(output_dir, 'Sim_flat_flat{0}_{1:0.1f}_sim.fits'.format(i, signal))
-        imarr_results = imsim.serial_readout(template_file, outfile=outfile, overwrite=True)
+        imarr_results = imsim.simulate_readout(template_file, outfile=outfile)
 
 if __name__ == '__main__':
 
