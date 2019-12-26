@@ -26,39 +26,44 @@ trapping on measurements of the CTI.  Recommended comparison:
 """
 
 from ctisim import ITL_AMP_GEOM
-from ctisim import SegmentSimulator, SerialRegister, OutputAmplifier, SerialTrap
+from ctisim import SegmentSimulator, OutputAmplifier, SerialTrap
 from ctisim.utils import calculate_cti
 import argparse
 
 def main(signal, cti, trap_size):
 
+    amp_geom = ITL_AMP_GEOM
+    serial_overscan_width = amp_geom.serial_overscan_width
+    parallel_overscan_width = int(amp_geom.naxis2 - amp_geom.ny)
+    last_pixel = amp_geom.nx + amp_geom.prescan_width - 1
+
+    # Create the output amplifier
+    output_amplifier = OutputAmplifier(1.0, 6.5)
+
     # Create simulated image segment with desired signal level
-    segment = SegmentSimulator.from_amp_geom(ITL_AMP_GEOM)
+    segment = SegmentSimulator.from_amp_geom(amp_geom, output_amplifier, cti=cti)
     segment.flatfield_exp(signal)
 
     # Create SerialTrap object.  
     # For now only the `trap_size` parameter will be modified. 
     # The trap will be placed at pixel 1, in the serial prescan.
-    density_factor = 0.1
-    emission_time = 1.0 
-    location = 1
-    trap = SerialTrap(density_factor, emission_time, trap_size, location)
+    size = trap_size
+    scaling = 0.1
+    emission_time = 1.0
+    threshold = 0.0
+    pixel = 1
+    trap = SerialTrap(size, scaling, emission_time, threshold, pixel)
 
-    # Create the serial register, now with a trap.
-    length = segment.ncols + segment.num_serial_prescan
-    serial_register = SerialRegister(length, cti=cti, trap=trap)
-
-    # Create the output amplifier
-    output_amplifier = OutputAmplifier(6.5)
+    segment.add_trap(trap)
 
     # Simulate readout
-    num_oscan = ITL_AMP_GEOM['num_serial_overscan']
-    seg_imarr = output_amplifier.serial_readout(segment, serial_register,
-                                                num_serial_overscan=num_oscan)
+    seg_imarr = segment.simulate_readout(serial_overscan_width = serial_overscan_width,
+                                         parallel_overscan_width = parallel_overscan_width,
+                                         do_trapping = True, do_bias_drift = False)
 
     # Calculate CTI
-    last_pix_num = ITL_AMP_GEOM['last_pixel_index']
-    result = calculate_cti(seg_imarr, last_pix_num, num_overscan_pixels=2)
+    last_pix_num = amp_geom.nx + amp_geom.prescan_width - 1
+    result = calculate_cti(seg_imarr, last_pixel, num_overscan_pixels=2)
     print(result)
 
 if __name__ == '__main__':

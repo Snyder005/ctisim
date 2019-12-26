@@ -180,3 +180,11 @@ class OutputAmplifier:
         self.drift_scale = drift_scale
         self.decay_time = decay_time
         self.threshold = threshold
+
+    def offset_drift(self, drift, signal):
+
+        new_drift = np.maximum(self.drift_scale*(signal - self.threshold), 
+                               np.zeros(signal.shape))
+        
+        return np.maximum(new_drift, drift*np.exp(-1/self.decay_time))
+        

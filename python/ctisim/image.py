@@ -1,18 +1,20 @@
 import os
 import galsim
 import warnings
+import copy
 import numpy as np
 import multiprocessing
 from astropy.io import fits
 
-from ctisim.core import SerialRegister
+import time
+
+from ctisim.core import OutputAmplifier, SerialTrap
 from lsst.eotest.sensor.MaskedCCD import MaskedCCD
 
 class ImageSimulator:
 
     def __init__(self, ny, nx, prescan_width, serial_overscan_width, 
-                 parallel_overscan_width, output_amplifiers, serial_registers, 
-                 segments):
+                 parallel_overscan_width, segments):
 
         ## Image geometry
         self.ny = ny
@@ -23,11 +25,10 @@ class ImageSimulator:
 
         ## CCD components
         self.segments = segments
-        self.output_amplifiers = output_amplifiers
-        self.serial_registers = serial_registers
 
     @classmethod
-    def image_from_fits(self, infile, output_amplifiers, bias_frame=None):
+    def image_from_fits(cls, infile, output_amplifiers, cti_dict=None, traps_dict=None,
+                        bias_frame=None):
 
         ## Geometry information from infile
         ccd = MaskedCCD(infile, bias_frame=bias_frame)
@@ -37,20 +38,90 @@ class ImageSimulator:
         serial_overscan_width = ccd.amp_geom.serial_overscan_width
         parallel_overscan_width = ccd.amp_geom.naxis2 - ccd.amp_geom.ny
 
+        if cti_dict is None:
+            cti_dict = {i : 0.0 for i in range(1, 17)}
+
+        if traps_dict is None:
+            traps_dict = {i : None for i in range(1, 17)}
+
         segments = {}
         for i in range(1, 17):
 
-            segments[i] = SegmentSimulator(ccd.unbiased_and_trimmed_image(i).getImage().getArray(),
-                                           prescan_width, output_amplifiers[i])
+            output_amplifier = output_amplifiers[i]
+            cti = cti_dict[i]
+            traps = traps_dict[i]
 
-        imarr = cls(ny, nx, prescan_width, serial_overscan_width, 
-                    parallel_overscan_width, output_amplifiers,
-                    serial_registers, segments)
+            imarr = ccd.unbiased_and_trimmed_image(i).getImage().getArray()
+            segments[i] = SegmentSimulator(imarr, prescan_width, output_amplifier, cti=cti, 
+                                           traps=traps)
 
-        return imarr
+        image = cls(ny, nx, prescan_width, serial_overscan_width, 
+                    parallel_overscan_width, segments)
+
+        return image
+
+    @classmethod
+    def from_amp_geom(cls, amp_geom, output_amplifiers, imarr_dict=None, cti_dict=None,
+                      traps_dict=None):
+
+        ny = amp_geom.ny
+        nx = amp_geom.nx
+        prescan_width = amp_geom.prescan_width
+        serial_overscan_width = int(amp_geom.serial_overscan_width)
+        parallel_overscan_width = int(amp_geom.naxis2 - amp_geom.ny)
+
+        if cti_dict is None:
+            cti_dict = {i : 0.0 for i in range(1, 17)}
+
+        if imarr_dict is None:
+            imarr_dict = {i : None for i in range(1, 17)}
+
+        if traps_dict is None:
+            traps_dict = {i : None for i in range(1, 17)}
+
+        segments = {}
+        for i in range(1, 17):
+            output_amplifier = output_amplifiers[i]
+            cti = cti_dict[i]
+            imarr = imarr_dict[i]
+            traps = traps_dict[i]
+
+            segments[i] =  SegmentSimulator.from_amp_geom(amp_geom, output_amplifier, 
+                                                          imarr=imarr, cti=cti, traps=traps)
+
+        image = cls(ny, nx, prescan_width, serial_overscan_width, 
+                    parallel_overscan_width, segments)
+
+        return image
+
+    def update_parameters(self, parameter_results):
+
+        with fits.open(parameter_results) as hdulist:
+
+            data = hdulist[1].data
+            cti = data['CTI']
+            drift_size = data['DRIFT_SIZE']
+            drift_tau = data['DRIFT_TAU']
+            drift_threshold = data['DRIFT_THRESHOLD']
+
+            trap_size = data['TRAP_SIZE']
+            trap_tau = data['TRAP_TAU']
+            trap_dfactor = data['TRAP_TAU']
+
+        for i in range(1, 17):
+
+            if trap_size[i-1] > 0.0:
+                self.segments[i].add_trap(SerialTrap(trap_size[i-1], trap_dfactor[i-1],
+                                                     trap_tau[i-1], 0, 1))
+
+            self.segments[i].cti = cti[i-1]
+            self.segments[i].output_amplifier.drift_scale = drift_size[i-1]
+            self.segments[i].output_amplifier.decay_time = drift_tau[i-1]
+            self.segments[i].output_amplifier.threshold = drift_threshold[i-1]
+            
 
     def simulate_readout(self, template_file, bitpix=32, outfile='simulated_image.fits', 
-                       use_multiprocessing=False, do_trapping=True, do_bias_drift=True):
+                         use_multiprocessing=False, do_bias_drift=True):
         """Perform the serial readout of all CCD segments.
 
         This method simulates the serial readout for each segment of the CCD,
@@ -76,7 +147,7 @@ class ImageSimulator:
             manager = mp.Manager()
             segarr_dict = manager.dict()
             job = [mp.Process(target=self.segment_readout, 
-                              args=(segarr_dict, amp, do_trapping, do_bias_drift)) for amp in range(1, 17)]
+                              args=(segarr_dict, amp, do_bias_drift)) for amp in range(1, 17)]
 
             _ = [p.start() for p in job]
             _ = [p.join() for p in job]
@@ -84,7 +155,7 @@ class ImageSimulator:
         else:
             segarr_dict = {}
             for amp in range(1, 17):
-                self.segment_readout(segarr_dict, amp, do_trapping, do_bias_drift)
+                self.segment_readout(segarr_dict, amp, do_bias_drift)
 
         ## Write results to FITs file
         with fits.open(template_file) as template:
@@ -96,11 +167,11 @@ class ImageSimulator:
                 output.append(imhdu)
             for i in (-3, -2, -1):
                 output.append(template[i])
-            output.writeto(outfile)
+            output.writeto(outfile, overwrite=True)
             
         return segarr_dict
 
-    def segment_readout(self, segarr_dict, amp, do_trapping=True, do_bias_drift=True):
+    def segment_readout(self, segarr_dict, amp, do_bias_drift=True):
         """Simulate readout of a single segment.
 
         This method is to facilitate the use of multiprocessing when reading out 
@@ -110,9 +181,10 @@ class ImageSimulator:
             segarr_dict ('dict' of 'numpy.array'): Dictionary of array results.
             amp (int): Amplifier number.
         """
-
-        im = self.segments[amp].simulate_readout(num_serial_overscan=self.serial_overscan_width,
-                                                 num_parallel_overscan=self.parallel_overscan_width)
+        print(amp)
+        im = self.segments[amp].simulate_readout(serial_overscan_width=self.serial_overscan_width,
+                                                 parallel_overscan_width=self.parallel_overscan_width,
+                                                 do_bias_drift=do_bias_drift)
         segarr_dict[amp] = im
 
     def flatfield_exp(self, signal, noise=True):
@@ -183,7 +255,7 @@ class SegmentSimulator:
         self.prescan_width = prescan_width
         self.ny, self.nx = imarr.shape
 
-        self.segarr = np.ones(self.ny, self.nx+prescan_width)
+        self.segarr = np.zeros((self.ny, self.nx+prescan_width))
         self.segarr[:, prescan_width:] = imarr
 
         ## Serial readout information
@@ -191,11 +263,29 @@ class SegmentSimulator:
         self.cti = cti
         
         self.serial_traps = None
+        self.do_trapping = False
         if traps is not None:
             if not isinstance(traps, list):
                 traps = [traps]
             for trap in traps:
-                self.add_serial_trap(trap)
+                self.add_trap(trap)
+
+    @classmethod
+    def from_amp_geom(cls, amp_geom, output_amplifier, imarr=None, cti=0.0, traps=None):
+
+        ny = amp_geom.ny
+        nx = amp_geom.nx
+
+        prescan_width = amp_geom.prescan_width
+
+        if imarr is not None:
+            assert imarr.shape == (ny, nx)
+        else:
+            imarr = np.zeros((ny, nx))
+
+        segment = cls(imarr, prescan_width, output_amplifier, cti=cti, traps=traps)
+
+        return segment
 
     def reset(self):
         """Reset segment image to zeros."""
@@ -208,6 +298,7 @@ class SegmentSimulator:
             self.serial_traps.append(serial_trap)
         except AttributeError:
             self.serial_traps = [serial_trap]
+            self.do_trapping = True
 
     def make_trap_arrays(self):
 
@@ -218,25 +309,30 @@ class SegmentSimulator:
         scaling = np.zeros((self.ny, self.nx+self.prescan_width))
         threshold = np.zeros((self.ny, self.nx+self.prescan_width))
         emission_time = np.zeros((self.ny, self.nx+self.prescan_width))
-        
-        pixel_occupation = []
-        for trap in self.traps:
+    
+        if self.serial_traps is None:
+            warnings.warn("No serial traps; using empty arrays.")
+            return size, scaling, threshold, emission_time
 
+        pixel_occupation = []
+        for trap in self.serial_traps:
+
+            loc = trap.pixel
             if loc in pixel_occupation:
                 raise ValueError("Only one trap allowed per pixel: {0}".format(loc))
             if loc > self.nx+self.prescan_width:
                 raise ValueError("Trap location outside of serial register: {0}".format(loc))
-            loc = trap.pixel
-            scaling[loc] = trap.scaling
-            size[loc] = trap.size
-            emission_time[loc] = trap.emission_time
-            threshold[loc] = trap.threshold
+
+            scaling[:, loc] = trap.scaling
+            size[:, loc] = trap.size
+            emission_time[:, loc] = trap.emission_time
+            threshold[:, loc] = trap.threshold
             pixel_occupation.append(loc)
 
         return size, scaling, threshold, emission_time
 
     def simulate_readout(self, serial_overscan_width=10, parallel_overscan_width=0,
-                         do_trapping=True, do_bias_drift=True):
+                         do_bias_drift=True):
         """Simulate serial readout of the segment image.
 
         This method performs the serial readout of a segment image given the
@@ -254,9 +350,8 @@ class SegmentSimulator:
         Returns:
             NumPy array.
         """
-        iy = self.ny + parallel_overscan_width
-        ix = self.nx + self.prescan_width + serial_overscan_width
-
+        iy = int(self.ny + parallel_overscan_width)
+        ix = int(self.nx + self.prescan_width + serial_overscan_width)
         image = np.random.normal(loc=self.output_amplifier.offset, 
                                  scale=self.output_amplifier.noise, 
                                  size=(iy, ix))
@@ -265,34 +360,38 @@ class SegmentSimulator:
         cti = self.cti
         cte = 1 - cti
         
-        if do_trapping:
+        if self.do_trapping:
             size, scaling, threshold, emission_time = self.make_trap_arrays()
 
-#        drift = np.zeros(self.ny)
-        
+        drift = np.zeros(self.ny)
+
         for i in range(ix):
-            
-            ## Trap capture
-            if do_trapping:
+
+             ## Trap capture
+            if self.do_trapping:
                 captured_charge = np.clip((free_charge-threshold)*scaling, 
-                                          trapped_charge, size) - trapped_charge
+                                       trapped_charge, size) - trapped_charge
                 trapped_charge += captured_charge
                 free_charge -= captured_charge
-    
+
             ## Pixel-to-pixel proportional loss
             transferred_charge = free_charge*cte
             deferred_charge = free_charge*cti
-            
+
             ## Pixel transfer and readout
-            image[:iy, i] += transferred_charge[:, 0]
+            if do_bias_drift:
+                drift = self.output_amplifier.offset_drift(drift, transferred_charge[:, 0])
+                image[:iy-parallel_overscan_width, i] += transferred_charge[:, 0] + drift
+            else:
+                image[:iy-parallel_overscan_width, i] += transferred_charge[:, 0]
             free_charge = np.pad(transferred_charge, ((0, 0), (0, 1)), mode='constant')[:, 1:] + deferred_charge
-                        
+
             ## Trap emission
-            if do_trapping:
+            if self.do_trapping:
                 released_charge = trapped_charge*(1-np.exp(-1./emission_time))
                 trapped_charge -= released_charge        
                 free_charge += released_charge
-            
+
         return image/float(self.output_amplifier.gain)
 
     def ramp_exp(self, signal_list):
@@ -312,7 +411,7 @@ class SegmentSimulator:
             raise ValueError
             
         ramp = np.tile(signal_list, (self.nx, 1)).T
-        self._imarr[:, self.prescan_width:] += ramp
+        self.segarr[:, self.prescan_width:] += ramp
         
     def flatfield_exp(self, signal, noise=True):
         """Simulate a flat field exposure.
@@ -328,7 +427,7 @@ class SegmentSimulator:
             flat = np.random.poisson(signal, size=(self.ny, self.nx))
         else:
             flat = np.ones((self.ny, self.nx))*signal
-        self._imarr[:, self.prescan_width:] += flat
+        self.segarr[:, self.prescan_width:] += flat
 
     def fe55_exp(self, num_fe55_hits, stamp_length=6, random_seed=None, psf_fwhm=0.00016, 
                  hit_flux=1620, hit_hlr=0.004):
@@ -356,7 +455,7 @@ class SegmentSimulator:
             x0 = np.random.randint(self.prescan_width,
                                    self.nx+self.prescan_width-sx)
 
-            self._imarr[y0:y0+sy, x0:x0+sx] += stamp
+            self.segarr[y0:y0+sy, x0:x0+sx] += stamp
         
     @staticmethod
     def sim_fe55_hit(random_seed=None, stamp_length=6, psf_fwhm=0.00016,
