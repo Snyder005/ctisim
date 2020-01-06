@@ -29,6 +29,7 @@ class ImageSimulator:
     @classmethod
     def image_from_fits(cls, infile, output_amplifiers, cti_dict=None, traps_dict=None,
                         bias_frame=None):
+        """Initialize from existing FITs file."""
 
         ## Geometry information from infile
         ccd = MaskedCCD(infile, bias_frame=bias_frame)

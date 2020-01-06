@@ -182,6 +182,7 @@ class OutputAmplifier:
         self.threshold = threshold
 
     def offset_drift(self, drift, signal):
+        """Calculate bias value hysteresis."""
 
         new_drift = np.maximum(self.drift_scale*(signal - self.threshold), 
                                np.zeros(signal.shape))
