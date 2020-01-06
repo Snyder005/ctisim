@@ -143,6 +143,10 @@ class SensorModelParams:
 class SerialTrap:
     """Represents a serial register trap.
 
+    This is a base class which all serial trap class variations inherit from.
+    All serial trap classes use the same emission function, but must re-implement
+    their specific trapping functions.
+
     Attributes:
         density_factor (float): Fraction of pixel signal exposed to trap.
         emission_time (float): Trap emission time constant [1/transfers].
@@ -198,11 +202,10 @@ class LinearTrap(SerialTrap):
         self.threshold = threshold
 
     def trap_charge(self, free_charge):
-        """Perform linear charge capture."""
+        """Perform charge capture using a linear function."""
         
         captured_charge = np.clip((free_charge-self.threshold)*self.scaling,
                                   self.trapped_charge, self._trap_array) - self.trapped_charge
-
         self._trapped_charge += captured_charge
 
         return captured_charge
@@ -216,10 +219,10 @@ class LogisticTrap(SerialTrap):
         self.k = k
 
     def trap_charge(self, free_charge):
+        """Perform charge capture using a logistic function."""
 
         captured_charge = np.clip(self._trap_array/(1.+np.exp(-self.k*(free_charge-self.f0))),
                                   self.trapped_charge, None) - self.trapped_charge
-
         self._trapped_charge += captured_charge
 
         return captured_charge
