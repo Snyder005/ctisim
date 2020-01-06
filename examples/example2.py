@@ -40,8 +40,6 @@ def main(template_file, cti, signal, output_dir='./'):
 
     # Each segment needs it out ReadoutAmplifier and SerialRegister object.
     # For now they will all be the same.
-
-
     output_amplifiers = {amp : OutputAmplifier(1.0, 6.5) for amp in range(1, 17)}
 
     # Create an ImageSimulator object given amplifier geometry dictionary and
@@ -53,7 +51,7 @@ def main(template_file, cti, signal, output_dir='./'):
     # For a simulate image this always generates an output file.
     imarr_results = imagesim.simulate_readout(template_file, 
                                               outfile=join(output_dir, 'example_image.fits'),
-                                              do_trapping=False, do_bias_drift=False)
+                                              do_bias_drift=False)
     
 if __name__ == '__main__':
 

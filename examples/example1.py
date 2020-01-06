@@ -42,7 +42,7 @@ def main(cti):
 
     # The `serial_readout()` method creates the final image.
     seg_imarr = segment.simulate_readout(serial_overscan_width = serial_overscan_width,
-                                         do_trapping = False, do_bias_drift = False)
+                                         do_bias_drift = False)
 
     ## Calculate CTI using the `calculate_cti()` utility function.
     result = calculate_cti(seg_imarr, last_pixel, num_overscan_pixels=2)

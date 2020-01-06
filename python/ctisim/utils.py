@@ -13,10 +13,8 @@ def calculate_cti(imarr, last_pix_num, num_overscan_pixels=1):
     """Calculate the serial CTI of an image array."""
     
     last_pix = np.mean(imarr[:, last_pix_num])
-    print(last_pix)
 
     overscan = np.mean(imarr[:, last_pix_num+1:], axis=0)
-    print(overscan[:num_overscan_pixels])
     cti = np.sum(overscan[:num_overscan_pixels])/(last_pix*last_pix_num)
                            
     return cti
