@@ -182,7 +182,6 @@ class ImageSimulator:
             segarr_dict ('dict' of 'numpy.array'): Dictionary of array results.
             amp (int): Amplifier number.
         """
-        print(amp)
         im = self.segments[amp].simulate_readout(serial_overscan_width=self.serial_overscan_width,
                                                  parallel_overscan_width=self.parallel_overscan_width,
                                                  do_bias_drift=do_bias_drift)
@@ -301,37 +300,6 @@ class SegmentSimulator:
             self.serial_traps = [serial_trap]
             self.do_trapping = True
 
-    def make_trap_arrays(self):
-
-        if self.serial_traps is None:
-            warnings.warn("No serial traps; using empty arrays.")
-
-        size = np.zeros((self.ny, self.nx+self.prescan_width))
-        scaling = np.zeros((self.ny, self.nx+self.prescan_width))
-        threshold = np.zeros((self.ny, self.nx+self.prescan_width))
-        emission_time = np.zeros((self.ny, self.nx+self.prescan_width))
-    
-        if self.serial_traps is None:
-            warnings.warn("No serial traps; using empty arrays.")
-            return size, scaling, threshold, emission_time
-
-        pixel_occupation = []
-        for trap in self.serial_traps:
-
-            loc = trap.pixel
-            if loc in pixel_occupation:
-                raise ValueError("Only one trap allowed per pixel: {0}".format(loc))
-            if loc > self.nx+self.prescan_width:
-                raise ValueError("Trap location outside of serial register: {0}".format(loc))
-
-            scaling[:, loc] = trap.scaling
-            size[:, loc] = trap.size
-            emission_time[:, loc] = trap.emission_time
-            threshold[:, loc] = trap.threshold
-            pixel_occupation.append(loc)
-
-        return size, scaling, threshold, emission_time
-
     def simulate_readout(self, serial_overscan_width=10, parallel_overscan_width=0,
                          do_bias_drift=True):
         """Simulate serial readout of the segment image.
@@ -357,23 +325,22 @@ class SegmentSimulator:
                                  scale=self.output_amplifier.noise, 
                                  size=(iy, ix))
         free_charge = copy.deepcopy(self.segarr)
-        trapped_charge = np.zeros(free_charge.shape)
         cti = self.cti
         cte = 1 - cti
         
         if self.do_trapping:
-            size, scaling, threshold, emission_time = self.make_trap_arrays()
-
+            for trap in self.serial_traps:
+                trap.initialize(self.ny, self.nx, self.prescan_width)
+            
         drift = np.zeros(self.ny)
 
         for i in range(ix):
 
              ## Trap capture
             if self.do_trapping:
-                captured_charge = np.clip((free_charge-threshold)*scaling, 
-                                       trapped_charge, size) - trapped_charge
-                trapped_charge += captured_charge
-                free_charge -= captured_charge
+                for trap in self.serial_traps:
+                    captured_charge = trap.trap_charge(free_charge)
+                    free_charge -= captured_charge
 
             ## Pixel-to-pixel proportional loss
             transferred_charge = free_charge*cte
@@ -389,9 +356,9 @@ class SegmentSimulator:
 
             ## Trap emission
             if self.do_trapping:
-                released_charge = trapped_charge*(1-np.exp(-1./emission_time))
-                trapped_charge -= released_charge        
-                free_charge += released_charge
+                for trap in self.serial_traps:
+                    released_charge = trap.release_charge()
+                    free_charge += released_charge
 
         return image/float(self.output_amplifier.gain)
 
