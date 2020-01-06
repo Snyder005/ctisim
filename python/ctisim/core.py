@@ -150,13 +150,79 @@ class SerialTrap:
         location (int): Serial pixel location of trap.
     """
     
-    def __init__(self, size, scaling, emission_time, threshold, pixel):
+    def __init__(self, size, emission_time, pixel):
         
         self.size = size
-        self.scaling = scaling
         self.emission_time = emission_time
-        self.threshold = threshold
         self.pixel = pixel
+        self._trap_array = None
+        self._trapped_charge = None
+
+    @property
+    def trap_array(self):
+        return self._trap_array
+
+    @property
+    def trapped_charge(self):
+        return self._trapped_charge
+
+    def initialize(self, ny, nx, prescan_width):
+        """Initialize trapping arrays for simulated readout."""
+
+        if self.pixel > nx+prescan_width:
+            raise ValueError('Trap location {0} must be less than {1}'.format(self.pixel,
+                                                                              nx+prescan_width))
+
+        self._trap_array = np.zeros((ny, nx+prescan_width))
+        self._trap_array[:, self.pixel] = self.size
+        self._trapped_charge = np.zeros((ny, nx+prescan_width))
+
+    def release_charge(self):
+        """Release charge through exponential decay."""
+        
+        released_charge = self._trapped_charge*(1-np.exp(-1./self.emission_time))
+        self._trapped_charge -= released_charge
+
+        return released_charge
+
+    def trap_charge(self):
+        """Capture charge according to trapping function and parameters."""
+        raise NotImplementedError
+
+class LinearTrap(SerialTrap):
+
+    def __init__(self, size, emission_time, pixel, scaling, threshold):
+
+        super().__init__(size, emission_time, pixel)
+        self.scaling = scaling
+        self.threshold = threshold
+
+    def trap_charge(self, free_charge):
+        """Perform linear charge capture."""
+        
+        captured_charge = np.clip((free_charge-self.threshold)*self.scaling,
+                                  self.trapped_charge, self._trap_array) - self.trapped_charge
+
+        self._trapped_charge += captured_charge
+
+        return captured_charge
+
+class LogisticTrap(SerialTrap):
+
+    def __init__(self, size, emission_time, pixel, f0, k):
+
+        super().__init__(size, emission_time, pixel)
+        self.f0 = f0
+        self.k = k
+
+    def trap_charge(self, free_charge):
+
+        captured_charge = np.clip(self._trap_array/(1.+np.exp(-self.k*(free_charge-self.f0))),
+                                  self.trapped_charge, None) - self.trapped_charge
+
+        self._trapped_charge += captured_charge
+
+        return captured_charge
 
 class OutputAmplifier:
     """Object representing the readout amplifier of a single channel.
