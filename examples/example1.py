@@ -12,9 +12,8 @@ To run this script, write
 where <cti> is the desired value for CTI.
 
 The demonstrated class usages are:
-    * SegmentSimulator(shape, num_serial_prescan)
-    * SerialRegister(length, cti)
-    * OutputAmplifier(noise)
+    * OutputAmplifier(gain, noise)
+    * SegmentSimulator.from_amp_geom(amp_geom, output_amplifier, cti)
 
 This example makes use of the `ITL_AMP_GEOM` utility dictionary,
 which contains all the necessary pixel geometry information 
@@ -22,34 +21,31 @@ corresponding to an ITL CCD segment.
 """
 
 from ctisim import ITL_AMP_GEOM
-from ctisim import SegmentSimulator, SerialRegister, OutputAmplifier
+from ctisim import SegmentSimulator, OutputAmplifier
 from ctisim.utils import calculate_cti
 import argparse
 
 def main(cti):
 
+    amp_geom = ITL_AMP_GEOM
+    serial_overscan_width = amp_geom.serial_overscan_width
+    last_pixel = amp_geom.nx + amp_geom.prescan_width - 1
+
+    # Create an OutputAmplifier object with 6.5 electrons of noise.
+    output_amplifier = OutputAmplifier(1.0, 6.5)
+
     # Create a SegmentSimulator object using `from_amp_geom()` method.
     # This method constructs a SegmentSimulator from a dictionary
     # containing information on the segment geometry.
-    segment = SegmentSimulator.from_amp_geom(ITL_AMP_GEOM)
-    segment.flatfield_exp(50000.)
-
-    # Create a SerialRegister object with the desired CTI value.
-    # The length of the register will be the segment columns
-    # plus any additional physical prescan pixels.
-    length = segment.ncols + segment.num_serial_prescan
-    serial_register = SerialRegister(length, cti)
-
-    # Create an OutputAmplifier object with 6.5 electrons of noise.
-    output_amplifier = OutputAmplifier(6.5)
+    segment = SegmentSimulator.from_amp_geom(amp_geom, output_amplifier, cti=cti)
+    segment.flatfield_exp(50000)
 
     # The `serial_readout()` method creates the final image.
-    seg_imarr = output_amplifier.serial_readout(segment, serial_register,
-                                                 num_serial_overscan=10)
+    seg_imarr = segment.simulate_readout(serial_overscan_width = serial_overscan_width,
+                                         do_trapping = False, do_bias_drift = False)
 
     ## Calculate CTI using the `calculate_cti()` utility function.
-    last_pix_num = ITL_AMP_GEOM['last_pixel_index']
-    result = calculate_cti(seg_imarr, last_pix_num, num_overscan_pixels=2)
+    result = calculate_cti(seg_imarr, last_pixel, num_overscan_pixels=2)
     print(result)
 
 if __name__ == '__main__':
