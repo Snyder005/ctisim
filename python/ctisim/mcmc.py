@@ -1,87 +1,96 @@
 import numpy as np
-
-from ctisim import SerialTrap, OutputAmplifier, SegmentSimulator
+from ctisim import OutputAmplifier, SegmentSimulator, LinearTrap
 
 class TrapModelFitting:
-    """Object to control MCMC parameter fitting of a serial trapping model."""
-    
-    def __init__(self, constraints, amp_geom, num_oscan_pixels=5):
-        
+
+    def __init__(self, params0, constraints, amp_geom, trap_type=LinearTrap, 
+                 num_oscan_pixels=5):
+
+        self.params0 = params0
         self.constraints = constraints
+
+        if self.logprior(params0) == 0.0:
+            raise ValueError("Initial parameters lie outside constrained bounds.")
+
+        self.start = amp_geom.nx + amp_geom.prescan_width
+        self.stop = self.start + num_oscan_pixels
         self.amp_geom = amp_geom
-        self.num_oscan_pixels = num_oscan_pixels
-        
-    def logprior(self, trap_params):
+
+        self.trap_type = trap_type
+
+    def initialize_walkers(self, scale_list, walkers):
+
+        params_list = []
+        for i, param0 in enumerate(self.params0):
+
+            low, high = self.constraints[i]
+            params = np.clip(np.random.normal(param0, scale=scale_list[i], size=walkers),
+                             low, high)
+            params_list.append(params)
+
+        p0 = np.asarray(params_list).T
+
+        return p0
+
+    def logprior(self, params):
         """Calculate log prior for given parameters and constraints."""
+
+        for i, param in enumerate(params):
+            low, high = self.constraints[i]
+            if not (param>low)*(param<high):
+                return -np.inf
         
-        ## Parameter constraint min/max limits
-        ctiexp_l, ctiexp_h = self.constraints['ctiexp']
-        df_l, df_h = self.constraints['densityfactor']
-        tau_l, tau_h = self.constraints['tau']
-        trapsize_l, trapsize_h = self.constraints['trapsize']
-        
-        ## Log prior calculation
-        ctiexp, df, tau, trapsize = trap_params
-        if (ctiexp>ctiexp_l)*(ctiexp<ctiexp_h)*(tau>tau_l)*(tau<tau_h)*(trapsize>trapsize_l)*(trapsize<trapsize_h)*(df>df_l)*(df<df_h):
-            return 0.0
-        else:
-            return -np.inf
-            
-    def loglikelihood(self, trap_params, flux_array, data_rows, error, 
-                      trap_locations, biasdrift_params=None):
+        return 0.0
+
+    def loglikelihood(self, params, signals, data, error, trap_pixel, 
+                      biasdrift_params=None):
         """Calculate log likelihood for model with given parameters."""
-        
-        ctiexp, scaling, emission_time, size = trap_params
-        cti = 10.**ctiexp
-        model_params = [cti, scaling, emission_time, size, 0.0]
-        
-        start = self.amp_geom.prescan_width + self.amp_geom.nx
-        stop = start+self.num_oscan_pixels
-        model_rows = self.simplified_model(model_params, flux_array, trap_locations, 
-                                           self.amp_geom, biasdrift_params=biasdrift_params)
-        
-        model = model_rows[:, start:stop]
-        data = data_rows[:, start:stop]
+
+        model = self.simplified_model(params, signals, trap_pixel, self.amp_geom,
+                                      biasdrift_params=biasdrift_params,
+                                      trap_type=self.trap_type)
+
         inv_sigma2 = 1./(error**2.)
+        diff = (model-data)[self.start:self.stop]
+
+        return -0.5*(np.sum(inv_sigma2*(diff)**2.))
         
-        return -0.5*(np.sum(inv_sigma2*(data-model)**2.))
-        
-    def logprobability(self, trap_params, flux_array, meanrows, error, 
-                       trap_locations, biasdrift_params=None):
-        """Calculate sum of log likelihood and log prior."""
-        
-        lp = self.logprior(trap_params)
+    def logprobability(self, params, signals, data, error, trap_pixel,
+                       biasdrift_params=None):
+
+        lp = self.logprior(params)
         if not np.isfinite(lp):
             return -np.inf
         else:
-            result = lp + self.loglikelihood(trap_params, flux_array, meanrows, error, 
-                                             trap_locations, biasdrift_params=biasdrift_params)
+            result = lp + self.loglikelihood(params, signals, data, error, trap_pixel, 
+                                             biasdrift_params=biasdrift_params)
             return result
-        
+
     @staticmethod
-    def simplified_model(trap_params, flux_array, pixel, amp_geom, 
-                         biasdrift_params=None):
-        """Generate simulated data for given serial trap parameters."""
-    
-        nx = amp_geom.nx
-        prescan_width = amp_geom.prescan_width
-        serial_overscan_width = amp_geom.serial_overscan_width
-        parallel_overscan_width = 0
+    def simplified_model(params, signals, trap_pixel, amp_geom,
+                         biasdrift_params=None, trap_type=LinearTrap):
 
-        cti, scaling, emission_time, size, threshold = trap_params        
-        trap = SerialTrap(size, scaling, emission_time, threshold, pixel)
+        ## Create SerialTrap object
+        cti = params[0]
+        size = params[1]
+        emission_time = params[2]
+        trap = trap_type(size, emission_time, trap_pixel, *params)
 
+        ## Create OutputAmplifier object
         if biasdrift_params is not None:
             drift_scale, decay_time, drift_threshold = biasdrift_params
             output_amplifier = OutputAmplifier(1.0, 0.0, offset=0.0, drift_scale=drift_scale,
                                                decay_time=decay_time, threshold=drift_threshold)
+            do_bias_drift = True
         else:
             output_amplifier = OutputAmplifier(1.0, 0.0, offset=0.0)
+            do_bias_drift = False
+            
+        imarr = np.zeros((len(signals), amp_geom.nx))
+        ramp = SegmentSimulator(imarr, amp_geom.prescan_width, output_amplifier, cti=cti,
+                                traps=trap)
+        ramp.ramp_exp(signals)
 
-        imarr = np.zeros((len(flux_array), nx))
-        flat = SegmentSimulator(imarr, prescan_width, output_amplifier, cti=cti, traps=trap)
-        flat.ramp_exp(flux_array)
-
-        return flat.simulate_readout(serial_overscan_width=serial_overscan_width, 
-                                      parallel_overscan_width=parallel_overscan_width,
-                                      do_trapping=True, do_bias_drift=True)
+        return ramp.simulate_readout(serial_overscan_width=amp_geom.serial_overscan_width,
+                                     parallel_overscan_width=0,
+                                     do_bias_drift=do_bias_drift)
