@@ -1,3 +1,12 @@
+# -*- coding: utf-8 -*-
+"""Image simulation classes.
+
+This submodule contains tools for simulating LSST segment and full CCD images.
+The LSST DM stack and the  `galsim` module is used to simulate sensor PSF
+and create realistic images.  Simulated image objects use deferred charge
+simulating tools within the full module to simulate the effects of serial readout.
+"""
+
 import os
 import galsim
 import warnings
@@ -5,8 +14,6 @@ import copy
 import numpy as np
 import multiprocessing
 from astropy.io import fits
-
-import time
 
 from ctisim.core import OutputAmplifier, SerialTrap
 from lsst.eotest.sensor.MaskedCCD import MaskedCCD
@@ -406,8 +413,8 @@ class SegmentSimulator:
         randomly on the segment image.
 
         Args:
-            num_fe55_hits (int): Number of Fe55 x-ray hits to perform.
-            stamp_length (int): Side length of desired Fe55 postage stamp.
+            num_fe55_hits (int): Number of Fe55 x-ray hits to simulate.
+            stamp_length (int): Side length of desired Fe55 hit postage stamp.
             random_seed (float): Random number generator seed.
             psf_fwhm (float): FWHM of sensor PSF.
             hit_flux (int): Total flux per Fe55 x-ray hit.

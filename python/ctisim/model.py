@@ -1,3 +1,14 @@
+# -*- coding: utf-8 -*-
+"""Simple deferred charge models.
+
+This submodule contains function definitions to reproduce the overscan results
+due to a variety of different simplified deferred charge models.
+
+Todo:
+    * Modify the `biasdrift_model` in conjunction with the MCMC implementation
+      to remove the scaling factor of 10000. 
+"""
+
 import numpy as np
 
 def trap_model(params, pixel_array, flux_array, num_transfers):
