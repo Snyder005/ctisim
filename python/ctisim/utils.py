@@ -48,7 +48,7 @@ def calculate_cti(imarr, last_pix_num, num_overscan_pixels=1):
                            
     return cti
 
-def save_mcmc_results(sensor_id, amp, chain, outfile, model='linear'):
+def save_mcmc_results(sensor_id, amp, chain, outfile, trap_type):
     """Save the MCMC model fitting results to a FITs file.
 
     Convenience function to save the chain results of the `emcee` module's 
@@ -68,7 +68,7 @@ def save_mcmc_results(sensor_id, amp, chain, outfile, model='linear'):
     hdr = fits.Header()
     hdr['SENSORID'] = sensor_id
     hdr['AMP'] = amp
-    hdr['TYPE'] = model
+    hdr['TYPE'] = trap_type.model_type
     hdr['STEPS'] = steps
     hdr['WALKERS'] = walkers
 
@@ -80,9 +80,8 @@ def save_mcmc_results(sensor_id, amp, chain, outfile, model='linear'):
     hdulist = fits.HDUList([prihdu, ctiexp_hdu, trapsize_hdu, emission_time_hdu])
 
     for i in range(3, ndim):
-        chain = sampler.chain[:, :, i]
-        name = trap_type.parameter_keywords()[i-3]
-        param_hdu = fits.ImageHDU(data=chain, name=name)
+        name = trap_type.parameter_keywords[i-3]
+        param_hdu = fits.ImageHDU(data=chain[:, :, i], name=name)
         hdulist.append(param_hdu)
 
     hdulist.writeto(outfile, overwrite=True)
