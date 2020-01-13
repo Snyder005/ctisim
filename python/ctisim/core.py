@@ -63,6 +63,9 @@ class SerialTrap:
 
 class LinearTrap(SerialTrap):
 
+    parameter_keywords = ['scaling', 'threshold']
+    model_type = 'linear'
+
     def __init__(self, size, emission_time, pixel, scaling, threshold):
 
         super().__init__(size, emission_time, pixel)
@@ -78,13 +81,10 @@ class LinearTrap(SerialTrap):
 
         return captured_charge
 
-    @staticmethod
-    def parameter_keywords():
-        """Return keywords for trap model parameters."""
-
-        return ['scaling', 'threshold']
-
 class LogisticTrap(SerialTrap):
+
+    parameter_keywords = ['f0', 'k']
+    model_type = 'logistic'
 
     def __init__(self, size, emission_time, pixel, f0, k):
 
@@ -96,16 +96,10 @@ class LogisticTrap(SerialTrap):
         """Perform charge capture using a logistic function."""
 
         captured_charge = np.clip(self._trap_array/(1.+np.exp(-self.k*(free_charge-self.f0))),
-                                  self.trapped_charge, None) - self.trapped_charge
+                                  self.trapped_charge, self._trap_array) - self.trapped_charge
         self._trapped_charge += captured_charge
 
         return captured_charge
-
-    @staticmethod
-    def parameter_keywords():
-        """Return keywords for trap model parameters."""
-
-        return ['f0', 'k']
 
 class OutputAmplifier:
     """Object representing the readout amplifier of a single channel.

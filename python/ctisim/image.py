@@ -267,6 +267,8 @@ class SegmentSimulator:
 
         ## Serial readout information
         self.output_amplifier = output_amplifier
+        if isinstance(cti, np.ndarray):
+            raise ValueError("cti must be single value, not an array.")
         self.cti = cti
         
         self.serial_traps = None
