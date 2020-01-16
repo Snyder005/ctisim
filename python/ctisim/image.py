@@ -5,6 +5,9 @@ This submodule contains tools for simulating LSST segment and full CCD images.
 The LSST DM stack and the  `galsim` module is used to simulate sensor PSF
 and create realistic images.  Simulated image objects use deferred charge
 simulating tools within the full module to simulate the effects of serial readout.
+
+To Do:
+    * Modify ramp function to use different kwargs such as low/high or list of signals.
 """
 
 import os
@@ -34,7 +37,7 @@ class ImageSimulator:
         self.segments = segments
 
     @classmethod
-    def image_from_fits(cls, infile, output_amplifiers, cti_dict=None, traps_dict=None,
+    def from_fits(cls, infile, output_amplifiers, cti_dict=None, traps_dict=None,
                         bias_frame=None):
         """Initialize from existing FITs file."""
 
@@ -102,32 +105,55 @@ class ImageSimulator:
 
         return image
 
-    def update_parameters(self, parameter_results):
+    def fe55_exp(self, num_fe55_hits, stamp_length=6, psf_fwhm=0.00016, 
+                 hit_flux=1620, hit_hlr=0.004):
+        """Simulate an Fe55 exposure.
 
-        with fits.open(parameter_results) as hdulist:
+        This method simulates a Fe55 soft x-ray CCD image using the Galsim module.  
+        Fe55 x-ray hits are randomly generated as postage stamps and positioned 
+        randomly on each of the segment images.
 
-            data = hdulist[1].data
-            cti = data['CTI']
-            drift_size = data['DRIFT_SIZE']
-            drift_tau = data['DRIFT_TAU']
-            drift_threshold = data['DRIFT_THRESHOLD']
-
-            trap_size = data['TRAP_SIZE']
-            trap_tau = data['TRAP_TAU']
-            trap_dfactor = data['TRAP_TAU']
-
+        Args:
+            num_fe55_hits (int): Number of Fe55 x-ray hits to perform.
+            stamp_length (int): Side length of desired Fe55 postage stamp.
+            random_seed (float): Random number generator seed.
+            psf_fwhm (float): FWHM of sensor PSF.
+            hit_flux (int): Total flux per Fe55 x-ray hit.
+            hit_hlr (float): Half-light radius of Fe55 x-ray hits.
+        """
         for i in range(1, 17):
+            self.segments[i].fe55_exp(num_fe55_hits, stamp_length=stamp_length, 
+                                      random_seed=None, psf_fwhm=psf_fwhm, 
+                                      hit_flux=hit_flux, hit_hlr=hit_hlr)
 
-            if trap_size[i-1] > 0.0:
-                self.segments[i].add_trap(SerialTrap(trap_size[i-1], trap_dfactor[i-1],
-                                                     trap_tau[i-1], 0, 1))
+    def flatfield_exp(self, signal, noise=True):
+        """Simulate a flat field exposure.
 
-            self.segments[i].cti = cti[i-1]
-            self.segments[i].output_amplifier.drift_scale = drift_size[i-1]
-            self.segments[i].output_amplifier.decay_time = drift_tau[i-1]
-            self.segments[i].output_amplifier.threshold = drift_threshold[i-1]
+        This method simulates a flat field CCD image with given signal level.
+        The simulated image can be generated with or with out shot noise.
+
+        Args:
+            signal (float): Signal level of the flat field.
+            noise (bool): Specifies inclusion of shot noise.
+        """
+        for i in range(1, 17):            
+            self.segments[i].flatfield_exp(signal, noise=noise)
+
+    def segment_readout(self, segarr_dict, amp, do_bias_drift=True):
+        """Simulate readout of a single segment.
+
+        This method is to facilitate the use of multiprocessing when reading out 
+        an entire image (16 segments). 
+
+        Args:
+            segarr_dict ('dict' of 'numpy.array'): Dictionary of array results.
+            amp (int): Amplifier number.
+        """
+        im = self.segments[amp].simulate_readout(serial_overscan_width=self.serial_overscan_width,
+                                                 parallel_overscan_width=self.parallel_overscan_width,
+                                                 do_bias_drift=do_bias_drift)
+        segarr_dict[amp] = im
             
-
     def simulate_readout(self, template_file, bitpix=32, outfile='simulated_image.fits', 
                          use_multiprocessing=False, do_bias_drift=True):
         """Perform the serial readout of all CCD segments.
@@ -179,54 +205,24 @@ class ImageSimulator:
             
         return segarr_dict
 
-    def segment_readout(self, segarr_dict, amp, do_bias_drift=True):
-        """Simulate readout of a single segment.
+    def update_all_parameters(self, parameter_results):
+        """Update CTI and output amplifier parameters for all segments."""
 
-        This method is to facilitate the use of multiprocessing when reading out 
-        an entire image (16 segments). 
+        for ampnum in range(1, 17):
+            update_segment_parameters(ampnum, parameter_results)
 
-        Args:
-            segarr_dict ('dict' of 'numpy.array'): Dictionary of array results.
-            amp (int): Amplifier number.
-        """
-        im = self.segments[amp].simulate_readout(serial_overscan_width=self.serial_overscan_width,
-                                                 parallel_overscan_width=self.parallel_overscan_width,
-                                                 do_bias_drift=do_bias_drift)
-        segarr_dict[amp] = im
+    def update_segment_parameters(self, ampnum, parameter_results):
+        """Update CTI and output amplifier parameters for a single segment."""
 
-    def flatfield_exp(self, signal, noise=True):
-        """Simulate a flat field exposure.
+        cti = parameter_results.cti_results[ampnum]
+        drift_size = parameter_results.drift_sizes[ampnum]
+        decay_time = parameter_results.decay_times[ampnum]
+        threshold = parameter_results.thresholds[ampnum]
 
-        This method simulates a flat field CCD image with given signal level.
-        The simulated image can be generated with or with out shot noise.
-
-        Args:
-            signal (float): Signal level of the flat field.
-            noise (bool): Specifies inclusion of shot noise.
-        """
-        for i in range(1, 17):            
-            self.segments[i].flatfield_exp(signal, noise=noise)
-
-    def fe55_exp(self, num_fe55_hits, stamp_length=6, psf_fwhm=0.00016, 
-                 hit_flux=1620, hit_hlr=0.004):
-        """Simulate an Fe55 exposure.
-
-        This method simulates a Fe55 soft x-ray CCD image using the Galsim module.  
-        Fe55 x-ray hits are randomly generated as postage stamps and positioned 
-        randomly on each of the segment images.
-
-        Args:
-            num_fe55_hits (int): Number of Fe55 x-ray hits to perform.
-            stamp_length (int): Side length of desired Fe55 postage stamp.
-            random_seed (float): Random number generator seed.
-            psf_fwhm (float): FWHM of sensor PSF.
-            hit_flux (int): Total flux per Fe55 x-ray hit.
-            hit_hlr (float): Half-light radius of Fe55 x-ray hits.
-        """
-        for i in range(1, 17):
-            self.segments[i].fe55_exp(num_fe55_hits, stamp_length=stamp_length, 
-                                      random_seed=None, psf_fwhm=psf_fwhm, 
-                                      hit_flux=hit_flux, hit_hlr=hit_hlr)
+        self.segments[i].cti = cti
+        self.segments[i].output_amplifier.drift_size = drift_size
+        self.segments[i].output_amplifier.decay_time = decay_time
+        self.segments[i].output_amplifier.threshold = threshold
     
     @staticmethod
     def set_bitpix(hdu, bitpix):
@@ -296,11 +292,6 @@ class SegmentSimulator:
 
         return segment
 
-    def reset(self):
-        """Reset segment image to zeros."""
-
-        self.array[:, self.prescan_width:] = 0.0
-
     def add_trap(self, serial_trap):
 
         try:
@@ -308,6 +299,74 @@ class SegmentSimulator:
         except AttributeError:
             self.serial_traps = [serial_trap]
             self.do_trapping = True
+
+    def fe55_exp(self, num_fe55_hits, stamp_length=6, random_seed=None, psf_fwhm=0.00016, 
+                 hit_flux=1620, hit_hlr=0.004):
+        """Simulate an Fe55 exposure.
+
+        This method simulates a Fe55 soft x-ray segment image using the Galsim module.  
+        Fe55 x-ray hits are randomly generated as postage stamps and positioned 
+        randomly on the segment image.
+
+        Args:
+            num_fe55_hits (int): Number of Fe55 x-ray hits to simulate.
+            stamp_length (int): Side length of desired Fe55 hit postage stamp.
+            random_seed (float): Random number generator seed.
+            psf_fwhm (float): FWHM of sensor PSF.
+            hit_flux (int): Total flux per Fe55 x-ray hit.
+            hit_hlr (float): Half-light radius of Fe55 x-ray hits.
+        """
+        for i in range(num_fe55_hits):
+            
+            stamp = self.sim_fe55_hit(random_seed=random_seed, stamp_length=stamp_length,
+                                      psf_fwhm=psf_fwhm, hit_flux=hit_flux, hit_hlr=hit_hlr).array
+            sy, sx = stamp.shape
+
+            y0 = np.random.randint(0, self.ny-sy)
+            x0 = np.random.randint(self.prescan_width,
+                                   self.nx+self.prescan_width-sx)
+
+            self.segarr[y0:y0+sy, x0:x0+sx] += stamp
+
+    def flatfield_exp(self, signal, noise=True):
+        """Simulate a flat field exposure.
+
+        This method simulates a flat field segment image with given signal level.
+        The simulated image can be generated with or with out shot noise.
+
+        Args:
+            signal (float): Signal level of the flat field.
+            noise (bool): Specifies inclusion of shot noise.
+        """
+        if noise:
+            flat = np.random.poisson(signal, size=(self.ny, self.nx))
+        else:
+            flat = np.ones((self.ny, self.nx))*signal
+        self.segarr[:, self.prescan_width:] += flat
+
+    def ramp_exp(self, signal_list):
+        """Simulate an image with varying flux illumination per row.
+
+        This method simulates a segment image where the signal level increases
+        along the horizontal direction, according to the provided list of
+        signal levels.
+
+        Args:
+            signal_list ('list' of 'float'): List of signal levels.
+
+        Raises:
+            ValueError: If number of signal levels does not equal the number of rows.
+        """
+        if len(signal_list) != self.ny:
+            raise ValueError
+            
+        ramp = np.tile(signal_list, (self.nx, 1)).T
+        self.segarr[:, self.prescan_width:] += ramp
+
+    def reset(self):
+        """Reset segment image to zeros."""
+
+        self.array[:, self.prescan_width:] = 0.0
 
     def simulate_readout(self, serial_overscan_width=10, parallel_overscan_width=0,
                          do_bias_drift=True):
@@ -370,69 +429,6 @@ class SegmentSimulator:
                     free_charge += released_charge
 
         return image/float(self.output_amplifier.gain)
-
-    def ramp_exp(self, signal_list):
-        """Simulate an image with varying flux illumination per row.
-
-        This method simulates a segment image where the signal level increases
-        along the horizontal direction, according to the provided list of
-        signal levels.
-
-        Args:
-            signal_list ('list' of 'float'): List of signal levels.
-
-        Raises:
-            ValueError: If number of signal levels does not equal the number of rows.
-        """
-        if len(signal_list) != self.ny:
-            raise ValueError
-            
-        ramp = np.tile(signal_list, (self.nx, 1)).T
-        self.segarr[:, self.prescan_width:] += ramp
-        
-    def flatfield_exp(self, signal, noise=True):
-        """Simulate a flat field exposure.
-
-        This method simulates a flat field segment image with given signal level.
-        The simulated image can be generated with or with out shot noise.
-
-        Args:
-            signal (float): Signal level of the flat field.
-            noise (bool): Specifies inclusion of shot noise.
-        """
-        if noise:
-            flat = np.random.poisson(signal, size=(self.ny, self.nx))
-        else:
-            flat = np.ones((self.ny, self.nx))*signal
-        self.segarr[:, self.prescan_width:] += flat
-
-    def fe55_exp(self, num_fe55_hits, stamp_length=6, random_seed=None, psf_fwhm=0.00016, 
-                 hit_flux=1620, hit_hlr=0.004):
-        """Simulate an Fe55 exposure.
-
-        This method simulates a Fe55 soft x-ray segment image using the Galsim module.  
-        Fe55 x-ray hits are randomly generated as postage stamps and positioned 
-        randomly on the segment image.
-
-        Args:
-            num_fe55_hits (int): Number of Fe55 x-ray hits to simulate.
-            stamp_length (int): Side length of desired Fe55 hit postage stamp.
-            random_seed (float): Random number generator seed.
-            psf_fwhm (float): FWHM of sensor PSF.
-            hit_flux (int): Total flux per Fe55 x-ray hit.
-            hit_hlr (float): Half-light radius of Fe55 x-ray hits.
-        """
-        for i in range(num_fe55_hits):
-            
-            stamp = self.sim_fe55_hit(random_seed=random_seed, stamp_length=stamp_length,
-                                      psf_fwhm=psf_fwhm, hit_flux=hit_flux, hit_hlr=hit_hlr).array
-            sy, sx = stamp.shape
-
-            y0 = np.random.randint(0, self.ny-sy)
-            x0 = np.random.randint(self.prescan_width,
-                                   self.nx+self.prescan_width-sx)
-
-            self.segarr[y0:y0+sy, x0:x0+sx] += stamp
         
     @staticmethod
     def sim_fe55_hit(random_seed=None, stamp_length=6, psf_fwhm=0.00016,
