@@ -114,7 +114,7 @@ class OutputAmplifier:
         drift_threshold (float): Cut-off threshold for bias drift.
     """
     
-    def __init__(self, gain, noise, offset=0.0, drift_scale=0.0, 
+    def __init__(self, gain, noise=0.0, offset=0.0, drift_scale=0.0, 
                  decay_time=np.nan, threshold=0.0):
 
         self.gain = gain

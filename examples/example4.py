@@ -13,7 +13,7 @@ def main(infile, bias_frame=None, output_dir='./output'):
     
     print("Processing image: {0}".format(infile))
     print("Using bias frame: {0}".format(bias_frame))
-    image = ImageSimulator.image_from_fits(infile, output_amplifiers, cti_dict=cti_dict, 
+    image = ImageSimulator.from_fits(infile, output_amplifiers, cti_dict=cti_dict, 
                                            bias_frame=bias_frame)
 
     print("Simulating readout with pixel transfer proportional loss.")
