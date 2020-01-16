@@ -34,24 +34,26 @@ from os.path import join
 from ctisim import ITL_AMP_GEOM
 from ctisim import OutputAmplifier, ImageSimulator
 
-def main(template_file, cti, signal, output_dir='./'):
+def main(template_file, cti, signal, output_dir='./output'):
 
-    amp_geom = ITL_AMP_GEOM
-
-    # Each segment needs it out ReadoutAmplifier and SerialRegister object.
-    # For now they will all be the same.
+    # Each segment needs its own ReadoutAmplifier and SerialRegister object.
+    # For this example they will all be the same.
     output_amplifiers = {amp : OutputAmplifier(1.0, 6.5) for amp in range(1, 17)}
 
     # Create an ImageSimulator object given amplifier geometry dictionary and
     # dictionaries containing the ReadoutAmplifier and SerialRegister objects.
+    print("Simulating flat field image with signal: {0:.1f} electrons".format(signal))
     imagesim = ImageSimulator.from_amp_geom(ITL_AMP_GEOM, output_amplifiers)
     imagesim.flatfield_exp(signal)
     
     # Simulate the serial readout.
     # For a simulate image this always generates an output file.
+    print("Simulating readout with CTI: {0:.1E}".format(cti))
+    outfile = join(output_dir, 'example_image.fits')
     imarr_results = imagesim.simulate_readout(template_file, 
-                                              outfile=join(output_dir, 'example_image.fits'),
-                                              do_bias_drift=False)
+                                              outfile=join(output_dir, 'example2_image.fits'),
+                                              do_bias_drift=False)    
+    print("Output file: {0}".format(outfile))
     
 if __name__ == '__main__':
 
@@ -60,7 +62,7 @@ if __name__ == '__main__':
                         help='Path to existing ITL CCD FITs file.')
     parser.add_argument('cti', type=float, help='Proportional loss from CTI.')
     parser.add_argument('signal', type=float, help='Flat field illumination signal [e-]')
-    parser.add_argument('--output_dir', '-o', type=str, default='./',
+    parser.add_argument('--output_dir', '-o', type=str, default='./output',
                         help='Directory for output files.')
     args = parser.parse_args()
 

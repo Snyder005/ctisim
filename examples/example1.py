@@ -37,16 +37,18 @@ def main(cti):
     # Create a SegmentSimulator object using `from_amp_geom()` method.
     # This method constructs a SegmentSimulator from a dictionary
     # containing information on the segment geometry.
+    print("Simulating flat field image with signal: 50000.0 electrons")
     segment = SegmentSimulator.from_amp_geom(amp_geom, output_amplifier, cti=cti)
     segment.flatfield_exp(50000)
 
     # The `serial_readout()` method creates the final image.
+    print("Simulating readout with CTI: {0:.1E}".format(cti))
     seg_imarr = segment.simulate_readout(serial_overscan_width = serial_overscan_width,
                                          do_bias_drift = False)
 
     ## Calculate CTI using the `calculate_cti()` utility function.
     result = calculate_cti(seg_imarr, last_pixel, num_overscan_pixels=2)
-    print(result)
+    print("CTI from EPER result: {0:.4E}".format(result))
 
 if __name__ == '__main__':
 
