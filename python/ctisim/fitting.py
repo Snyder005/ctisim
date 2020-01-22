@@ -19,9 +19,12 @@ class BaseSimpleModel:
         self.cti = cti
         self.num_transfers = num_transfers
 
-    def results(self, signals, start, limit=None):
+    def results(self, signals, start=1, stop=10):
 
-        x = np.arange(start, limit)
+        if start<1:
+            raise ValueError("Start pixel must be 1 or greater.")
+
+        x = np.arange(start, stop+1)
         model_results = np.zeros((signals.shape[0], x.shape[0]))
         for i, signal in enumerate(signals):
 
@@ -35,33 +38,37 @@ class BaseSimpleModel:
 class FixedLossModel(BaseSimpleModel):
 
     def __init__(self, params, num_transfers):
-        super.__init__(params[0], num_transfers)
+        super().__init__(params[0], num_transfers)
         self.size = params[1]
         self.tau = params[2]
 
     def overscan_pixels(self, signal, x):
 
-        r = self.size*np.exp(-x/self.tau) + (self.cti**x)*self.num_transfers*signal
+        A = self.size*(np.exp(1/self.tau) - 1)
+        r = A*np.exp(-x/self.tau) + (self.cti**x)*self.num_transfers*signal
 
         return r
 
 class BiasDriftModel(BaseSimpleModel):
 
     def __init__(self, params, num_transfers):  
-        super.__init__(params[0], num_transfers)
-        self.size = params[1]
+        super().__init__(params[0], num_transfers)
+        self.scale = params[1]
         self.tau = params[2]
 
     def overscan_pixels(self, signal, x):
 
-        r = (self.size*signal)*np.exp(-x/self.tau) + (self.cti**x)*self.num_transfers*signal
+        r = (self.scale*signal)*np.exp(-x/self.tau) + (self.cti**x)*self.num_transfers*signal
 
         return r
 
 class CTIModel(BaseSimpleModel):
 
     def __init__(self, params, num_transfers):
-        super.__init__(params[0], num_transfers):
+        
+        if not isinstance(params, list):
+            params = [params]
+        super().__init__(params[0], num_transfers)
 
     def overscan_pixels(self, signal, x):
         """Model proportional loss from CTI."""
@@ -88,7 +95,7 @@ class TrapSimulatedModel:
                                 cti=self.cti, traps=self.trap)
         ramp.ramp_exp(signals)
 
-        model_results = ramp.simulate_readout(serial_overscan_width=self.amp_geom.serial_overscan_width.
+        model_results = ramp.simulate_readout(serial_overscan_width=self.amp_geom.serial_overscan_width,
                                               parallel_overscan_width=0,
                                               do_bias_drift=self.do_bias_drift)
 
@@ -139,7 +146,7 @@ class OverscanFitting:
         """Calculate log likelihood for model."""
 
         model = self.overscan_model(params, *args, **kwargs)
-        model_pixels = model.results(signals, self.start, limit=self.stop))
+        model_pixels = model.results(signals, self.start, limit=self.stop)
 
         inv_sigma2 = 1./(error**2.)
         diff = model-data
