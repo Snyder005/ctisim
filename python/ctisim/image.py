@@ -8,6 +8,7 @@ simulating tools within the full module to simulate the effects of serial readou
 
 To Do:
     * Modify ramp function to use different kwargs such as low/high or list of signals.
+    * Need a check if a trap with "bad" parameter is passed, i.e. tau=NaN
 """
 
 import os
