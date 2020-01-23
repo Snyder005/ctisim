@@ -77,19 +77,23 @@ class CTIModel(BaseSimpleModel):
 
         return r
 
-class TrapSimulatedModel:
+class SimulatedTrapModel:
 
     def __init__(self, params, amp_geom, trap_type, output_amplifier, **kwargs):
 
         self.cti = params[0]        
         self.amp_geom = amp_geom
         self.output_amplifier = output_amplifier
+        self.do_bias_drift = kwargs.pop('do_bias_drift', False)
+        self.last_pix = amp_geom.prescan_width + amp_geom.nx
 
         trap_pixel = kwargs.pop('trap_pixel', 1)
         self.trap = trap_type(params[1], params[2], trap_pixel, *params[3:])
 
-    def results(self, signals, start, limit=None):
+    def results(self, signals, start=1, stop=10):
 
+        if start<1:
+            raise ValueError("Start pixel must be 1 or greater.")
         imarr = np.zeros((signals.shape[0], self.amp_geom.nx))
         ramp = SegmentSimulator(imarr, self.amp_geom.prescan_width, self.output_amplifier,
                                 cti=self.cti, traps=self.trap)
@@ -99,10 +103,7 @@ class TrapSimulatedModel:
                                               parallel_overscan_width=0,
                                               do_bias_drift=self.do_bias_drift)
 
-        if limit is None:
-            return model_result[self.last_pix:self.last_pix+start]
-        else:
-            return model_result[self.last_pix+start:self.last_pix+limit]
+        return model_results[:, self.last_pix+start-1:self.last_pix+stop]
 
 class OverscanFitting:
 
