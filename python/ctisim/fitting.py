@@ -15,8 +15,8 @@ from ctisim import OutputAmplifier, SegmentSimulator, LinearTrap, LogisticTrap
 
 class BaseSimpleModel:
 
-    def __init__(self, cti, num_transfers):
-        self.cti = cti
+    def __init__(self, ctiexp, num_transfers):
+        self.cti = 10**ctiexp
         self.num_transfers = num_transfers
 
     def results(self, signals, start=1, stop=10):
@@ -53,7 +53,7 @@ class BiasDriftModel(BaseSimpleModel):
 
     def __init__(self, params, num_transfers):  
         super().__init__(params[0], num_transfers)
-        self.scale = params[1]
+        self.scale = params[1]/10000.
         self.tau = params[2]
 
     def overscan_pixels(self, signal, x):
@@ -107,7 +107,7 @@ class SimulatedTrapModel:
 
 class OverscanFitting:
 
-    def __init__(self, params0, constraints, overscan_model, start, stop=None):
+    def __init__(self, params0, constraints, overscan_model, start=1, stop=10):
 
         self.params0 = params0
         self.constraints = constraints
@@ -115,6 +115,10 @@ class OverscanFitting:
             raise ValueError("Initial parameters lie outside constrained bounds.")
         self.overscan_model = overscan_model
 
+        if start<1:
+            raise ValueError("Start pixel must be 1 or greater")
+        if start >= stop:
+            raise ValueError("Start pixel must be less than stop pixel.")
         self.start = start
         self.stop = stop
 
@@ -138,7 +142,7 @@ class OverscanFitting:
 
         for i, param in enumerate(params):
             low, high = self.constraints[i]
-            if not (param>low)*(param<high):
+            if not (param>=low)*(param<=high):
                 return -np.inf
         
         return 0.0
@@ -147,10 +151,10 @@ class OverscanFitting:
         """Calculate log likelihood for model."""
 
         model = self.overscan_model(params, *args, **kwargs)
-        model_pixels = model.results(signals, self.start, limit=self.stop)
+        model_pixels = model.results(signals, start=self.start, stop=self.stop)
 
         inv_sigma2 = 1./(error**2.)
-        diff = model-data
+        diff = model_pixels-data
 
         return -0.5*(np.sum(inv_sigma2*(diff)**2.))
         
