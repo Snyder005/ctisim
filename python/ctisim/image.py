@@ -8,7 +8,6 @@ simulating tools within the full module to simulate the effects of serial readou
 
 To Do:
     * Modify ramp function to use different kwargs such as low/high or list of signals.
-    * Need a check if a trap with "bad" parameter is passed, i.e. tau=NaN
 """
 
 import os
@@ -27,45 +26,47 @@ class ImageSimulator:
     def __init__(self, ny, nx, prescan_width, serial_overscan_width, 
                  parallel_overscan_width, segments):
 
-        ## Image geometry
+        ## Verify and assign segments and geometry
+        for i in range(1, 17):
+            segment = segments[i]
+            assert segment.prescan_width == prescan_width
+            assert segment.ny == ny
+            assert segment.nx == nx
+        self.segments = segments
         self.ny = ny
         self.nx = nx
         self.prescan_width = prescan_width
         self.serial_overscan_width = serial_overscan_width
         self.parallel_overscan_width = parallel_overscan_width
 
-        ## CCD components
-        self.segments = segments
-
     @classmethod
-    def from_fits(cls, infile, output_amplifiers, cti_dict=None, traps_dict=None,
-                        bias_frame=None):
+    def from_image_fits(cls, infile, output_amplifiers, bias_frame=bias_frame,
+                        linearity_correction=linearity_correction, cti=None, traps=None):
         """Initialize from existing FITs file."""
 
         ## Geometry information from infile
-        ccd = MaskedCCD(infile, bias_frame=bias_frame)
+        ccd = MaskedCCD(infile, bias_frame=bias_frame, 
+                        linearity_correction=linearity_correction)
         prescan_width = ccd.amp_geom.prescan_width
         ny = ccd.amp_geom.ny
         nx = ccd.amp_geom.nx
         serial_overscan_width = ccd.amp_geom.serial_overscan_width
         parallel_overscan_width = ccd.amp_geom.naxis2 - ccd.amp_geom.ny
 
-        if cti_dict is None:
-            cti_dict = {i : 0.0 for i in range(1, 17)}
-
-        if traps_dict is None:
-            traps_dict = {i : None for i in range(1, 17)}
+        if cti is None:
+            cti = {i : 0.0 for i in range(1, 17)}
+        if traps is None:
+            traps = {i : None for i in range(1, 17)}
 
         segments = {}
         for i in range(1, 17):
 
             output_amplifier = output_amplifiers[i]
-            cti = cti_dict[i]
-            traps = traps_dict[i]
+            gain = output_amplifier.gain
 
-            imarr = ccd.unbiased_and_trimmed_image(i).getImage().getArray()
-            segments[i] = SegmentSimulator(imarr, prescan_width, output_amplifier, cti=cti, 
-                                           traps=traps)
+            imarr = ccd.unbiased_and_trimmed_image(i).getImage().getArray()*gain
+            segments[i] = SegmentSimulator(imarr, prescan_width, output_amplifier, 
+                                           cti=cti[i], traps=traps[i])
 
         image = cls(ny, nx, prescan_width, serial_overscan_width, 
                     parallel_overscan_width, segments)
@@ -73,8 +74,8 @@ class ImageSimulator:
         return image
 
     @classmethod
-    def from_amp_geom(cls, amp_geom, output_amplifiers, imarr_dict=None, cti_dict=None,
-                      traps_dict=None):
+    def from_amp_geom(cls, amp_geom, output_amplifiers, cti=None,
+                      traps=None):
 
         ny = amp_geom.ny
         nx = amp_geom.nx
@@ -82,24 +83,18 @@ class ImageSimulator:
         serial_overscan_width = int(amp_geom.serial_overscan_width)
         parallel_overscan_width = int(amp_geom.naxis2 - amp_geom.ny)
 
-        if cti_dict is None:
-            cti_dict = {i : 0.0 for i in range(1, 17)}
+        if cti is None:
+            cti = {i : 0.0 for i in range(1, 17)}
 
-        if imarr_dict is None:
-            imarr_dict = {i : None for i in range(1, 17)}
-
-        if traps_dict is None:
-            traps_dict = {i : None for i in range(1, 17)}
+        if traps is None:
+            traps = {i : None for i in range(1, 17)}
 
         segments = {}
         for i in range(1, 17):
             output_amplifier = output_amplifiers[i]
-            cti = cti_dict[i]
-            imarr = imarr_dict[i]
-            traps = traps_dict[i]
 
             segments[i] =  SegmentSimulator.from_amp_geom(amp_geom, output_amplifier, 
-                                                          imarr=imarr, cti=cti, traps=traps)
+                                                          cti=cti[i], traps=traps[i])
 
         image = cls(ny, nx, prescan_width, serial_overscan_width, 
                     parallel_overscan_width, segments)
@@ -277,23 +272,32 @@ class SegmentSimulator:
                 self.add_trap(trap)
 
     @classmethod
-    def from_amp_geom(cls, amp_geom, output_amplifier, imarr=None, cti=0.0, traps=None):
+    def from_amp_geom(cls, amp_geom, output_amplifier, cti=0.0, traps=None):
+        """Create SegmentSimulator object from AmplifierGeometry object.
 
-        ny = amp_geom.ny
-        nx = amp_geom.nx
+        This method takes an existing AmplifierGeometry object and uses this to
+        create a SegmentSimulator object with the desired image shape.  
+
+        Args:
+            amp_geom (AmplifierGeometry): Amplifier geometry information.
+            output_amplifier (OutputAmplifier): Output amplifier for the segment.
+            cti (float): CTI value for the segment.
+            traps (list of SerialTrap): Traps to include in the serial register.
+        """
 
         prescan_width = amp_geom.prescan_width
-
-        if imarr is not None:
-            assert imarr.shape == (ny, nx)
-        else:
-            imarr = np.zeros((ny, nx))
+        imarr = np.zeros((amp_geom.ny, amp_geom.nx))
 
         segment = cls(imarr, prescan_width, output_amplifier, cti=cti, traps=traps)
 
         return segment
 
     def add_trap(self, serial_trap):
+        """Add a trap to the serial register.
+
+        Args:
+            serial_trap (SerialTrap): Serial trap to include in serial register.
+        """
 
         try:
             self.serial_traps.append(serial_trap)
@@ -370,7 +374,7 @@ class SegmentSimulator:
         self.array[:, self.prescan_width:] = 0.0
 
     def simulate_readout(self, serial_overscan_width=10, parallel_overscan_width=0,
-                         do_bias_drift=True):
+                         do_offset_hysteresis=False):
         """Simulate serial readout of the segment image.
 
         This method performs the serial readout of a segment image given the
@@ -416,7 +420,7 @@ class SegmentSimulator:
             deferred_charge = free_charge*cti
 
             ## Pixel transfer and readout
-            if do_bias_drift:
+            if do_offset_hysteresis:
                 drift = self.output_amplifier.offset_drift(drift, transferred_charge[:, 0])
                 image[:iy-parallel_overscan_width, i] += transferred_charge[:, 0] + drift
             else:
