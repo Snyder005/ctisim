@@ -2,6 +2,9 @@
 """Core classes and objects.
 
 This submodule contains the core classes for use in the deferred charge simulations.
+
+To Do:
+    * Make OutputAmplifier with bias drift a subclass of a base Amplifier class.
 """
 
 import numpy as np
@@ -112,7 +115,20 @@ class LogisticTrap(SerialTrap):
 
         return captured_charge
 
-class OutputAmplifier:
+class BaseOutputAmplifier:
+
+    do_local_offset = False
+
+    def __init__(self, gain, noise=0.0, global_offset=0.0):
+
+        self.gain = gain
+        self.noise = noise
+        self.global_offset = global_offset
+
+    def local_offset(self, current, signal):
+        raise NotImplementedError
+
+class FloatingOutputAmplifier(BaseOutputAmplifier):
     """Object representing the readout amplifier of a single channel.
 
     Attributes:
@@ -124,21 +140,30 @@ class OutputAmplifier:
         drift_tau (float): Decay time constant for bias drift.
         drift_threshold (float): Cut-off threshold for bias drift.
     """
+    do_local_offset = True
     
     def __init__(self, gain, noise=0.0, offset=0.0, scale=0.0, 
                  decay_time=np.nan, threshold=0.0):
+        super.__init__(gain, noise, offset)
+        self.update_parameters(scale, decay_time, threshold)
 
-        self.gain = gain
-        self.noise = noise
-        self.offset = offset
-        self.scale = scale
-        self.decay_time = decay_time
-        self.threshold = threshold
-
-    def offset_hysteresis(self, current, signal):
-        """Calculate bias value hysteresis."""
+    def local_offset(self, old, signal):
+        """Calculate local offset hysteresis."""
 
         new = np.maximum(self.scale*(signal - self.threshold), np.zeros(signal.shape))
         
-        return np.maximum(new, current*np.exp(-1/self.decay_time))
+        return np.maximum(new, old*np.exp(-1/self.decay_time))
+
+    def update_parameters(self, scale, decay_time, threshold):
+
+        if scale =< 0.0:
+            raise ValueError("Hysteresis scale must be greater than or equal to 0.")
+        self.scale = scale
+        if decay_time <= 0.0:
+            raise ValueError("Decay time must be greater than 0.")
+        if np.isnan(decay_time):
+            raise ValueError("Decay time must be real-valued number, not NaN.")
+        self.decay_time = decay_time
+        if threshold < 0.0:
+            raise ValueError("Threshold must be greater than 0.")
         
