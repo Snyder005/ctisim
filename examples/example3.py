@@ -41,22 +41,24 @@ def main(signal, cti, trap_size):
     output_amplifier = OutputAmplifier(1.0, 6.5)
 
     # Create simulated image segment with desired signal level
+    print("Simulating flat field image with signal: {0} electrons".format(signal))
     segment = SegmentSimulator.from_amp_geom(amp_geom, output_amplifier, cti=cti)
     segment.flatfield_exp(signal)
 
     # Create SerialTrap object.  
     # For now only the `trap_size` parameter will be modified. 
     # The trap will be placed at pixel 1, in the serial prescan.
+    print("Adding linear serial trap of size: {0:.1f} electrons".format(size))
     size = trap_size
     scaling = 0.1
     emission_time = 1.0
     threshold = 0.0
     pixel = 1
     trap = LinearTrap(size, emission_time, pixel, scaling, threshold)
-
     segment.add_trap(trap)
 
     # Simulate readout
+    print("Simulating readout with CTI: {0:.1E}".format(cti))
     seg_imarr = segment.simulate_readout(serial_overscan_width = serial_overscan_width,
                                          parallel_overscan_width = parallel_overscan_width,
                                          do_bias_drift = False)
@@ -64,11 +66,11 @@ def main(signal, cti, trap_size):
     # Calculate CTI
     last_pix_num = amp_geom.nx + amp_geom.prescan_width - 1
     result = calculate_cti(seg_imarr, last_pixel, num_overscan_pixels=2)
-    print(result)
+    print("CTI from EPER result: {0:.4E}".format(result))
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Demonstrate CTI and charge trapping.')
+    parser = argparse.ArgumentParser(description='Demonstrate CTI and linear trapping.')
     parser.add_argument('signal', type=float, help='Flat field illumination signal [e-]')
     parser.add_argument('cti', type=float, help='Proportional loss from CTI.')
     parser.add_argument('trap_size', type=float, help='Size of charge trap.')
