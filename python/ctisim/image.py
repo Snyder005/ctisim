@@ -8,6 +8,7 @@ simulating tools within the full module to simulate the effects of serial readou
 
 To Do:
     * Modify ramp function to use different kwargs such as low/high or list of signals.
+    * Clean up update_parameter functions in here and in utils.
 """
 
 import os
@@ -374,7 +375,7 @@ class SegmentSimulator:
         self.array[:, self.prescan_width:] = 0.0
 
     def simulate_readout(self, serial_overscan_width=10, parallel_overscan_width=0,
-                         do_offset_hysteresis=False):
+                         **kwargs):
         """Simulate serial readout of the segment image.
 
         This method performs the serial readout of a segment image given the
@@ -392,25 +393,38 @@ class SegmentSimulator:
         Returns:
             NumPy array.
         """
+        ## Create output array
         iy = int(self.ny + parallel_overscan_width)
         ix = int(self.nx + self.prescan_width + serial_overscan_width)
-        image = np.random.normal(loc=self.output_amplifier.offset, 
+        image = np.random.normal(loc=self.output_amplifier.global_offset, 
                                  scale=self.output_amplifier.noise, 
                                  size=(iy, ix))
         free_charge = copy.deepcopy(self.segarr)
-        cti = self.cti
-        cte = 1 - cti
+
+        ## Keyword override toggles
+        if kwargs.get('no_trapping', False):
+            do_trapping = False
+        else:
+            do_trapping = self.do_trapping
+        if kwargs.get('no_local_offset', False):
+            do_local_offset = False
+        else:
+            do_local_offset = self.output_amplifier.do_local_offset
+        if kwargs.get('no_cti', False):
+            cti = 0.0
+        else:
+            cti = self.cti
         
-        if self.do_trapping:
+        offset = np.zeros(self.ny)
+        cte = 1 - cti
+        if do_trapping:
             for trap in self.serial_traps:
                 trap.initialize(self.ny, self.nx, self.prescan_width)
             
-        drift = np.zeros(self.ny)
-
         for i in range(ix):
 
              ## Trap capture
-            if self.do_trapping:
+            if do_trapping:
                 for trap in self.serial_traps:
                     captured_charge = trap.trap_charge(free_charge)
                     free_charge -= captured_charge
@@ -420,15 +434,17 @@ class SegmentSimulator:
             deferred_charge = free_charge*cti
 
             ## Pixel transfer and readout
-            if do_offset_hysteresis:
-                drift = self.output_amplifier.offset_drift(drift, transferred_charge[:, 0])
-                image[:iy-parallel_overscan_width, i] += transferred_charge[:, 0] + drift
+            if do_local_offset:
+                offset = self.output_amplifier.local_offset(offset, 
+                                                            transferred_charge[:, 0])
+                image[:iy-parallel_overscan_width, i] += transferred_charge[:, 0] + offset
             else:
                 image[:iy-parallel_overscan_width, i] += transferred_charge[:, 0]
-            free_charge = np.pad(transferred_charge, ((0, 0), (0, 1)), mode='constant')[:, 1:] + deferred_charge
+            free_charge = np.pad(transferred_charge, ((0, 0), (0, 1)), 
+                                 mode='constant')[:, 1:] + deferred_charge
 
             ## Trap emission
-            if self.do_trapping:
+            if do_trapping:
                 for trap in self.serial_traps:
                     released_charge = trap.release_charge()
                     free_charge += released_charge
