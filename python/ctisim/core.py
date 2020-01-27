@@ -24,9 +24,20 @@ class SerialTrap:
     
     def __init__(self, size, emission_time, pixel):
         
+        if size <= 0.0:
+            raise ValueError('Trap size must be greater than 0.')
         self.size = size
+
+        if emission_time <= 0.0:
+            raise ValueError('Emission time must be greater than 0.')
+        if np.isnan(emission_time):
+            raise ValueError('Emission time must be real-valued number, not NaN')
         self.emission_time = emission_time
+
+        if not isinstance(pixel, int):
+            raise ValueError('Pixel must be type int.')
         self.pixel = pixel
+
         self._trap_array = None
         self._trapped_charge = None
 
@@ -114,21 +125,20 @@ class OutputAmplifier:
         drift_threshold (float): Cut-off threshold for bias drift.
     """
     
-    def __init__(self, gain, noise=0.0, offset=0.0, drift_scale=0.0, 
+    def __init__(self, gain, noise=0.0, offset=0.0, scale=0.0, 
                  decay_time=np.nan, threshold=0.0):
 
         self.gain = gain
         self.noise = noise
         self.offset = offset
-        self.drift_scale = drift_scale
+        self.scale = scale
         self.decay_time = decay_time
         self.threshold = threshold
 
-    def offset_drift(self, drift, signal):
+    def offset_hysteresis(self, current, signal):
         """Calculate bias value hysteresis."""
 
-        new_drift = np.maximum(self.drift_scale*(signal - self.threshold), 
-                               np.zeros(signal.shape))
+        new = np.maximum(self.scale*(signal - self.threshold), np.zeros(signal.shape))
         
-        return np.maximum(new_drift, drift*np.exp(-1/self.decay_time))
+        return np.maximum(new, current*np.exp(-1/self.decay_time))
         
