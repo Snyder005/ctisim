@@ -217,9 +217,7 @@ class ImageSimulator:
         threshold = parameter_results.thresholds[ampnum]
 
         self.segments[i].cti = cti
-        self.segments[i].output_amplifier.drift_size = drift_size
-        self.segments[i].output_amplifier.decay_time = decay_time
-        self.segments[i].output_amplifier.threshold = threshold
+        self.segments[i].output_amplifier.update_parameters(drift_scale, decay_time, threshold)
     
     @staticmethod
     def set_bitpix(hdu, bitpix):

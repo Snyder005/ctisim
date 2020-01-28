@@ -15,7 +15,7 @@ import numpy as np
 from astropy.io import fits
 from lsst.eotest.sensor.AmplifierGeometry import AmplifierGeometry, amp_loc
 
-from ctisim import OutputAmplifier
+from ctisim import FloatingOutputAmplifier
 
 ITL_AMP_GEOM = AmplifierGeometry(prescan=3, nx=509, ny=2000, 
                                  detxsize=4608, detysize=4096,
@@ -29,13 +29,12 @@ E2V_AMP_GEOM = AmplifierGeometry(prescan=10, nx=512, ny=2002,
 
 class OverscanParameterResults:
 
-    def __init__(self, sensor_id, cti_results, drift_sizes, decay_times, thresholds):
+    def __init__(self, sensor_id, cti_results, drift_scales, decay_times):
 
         self.sensor_id = sensor_id
         self.cti_results = cti_results
-        self.drift_sizes = drift_sizes
+        self.drift_scales = drift_scales
         self.decay_times = decay_times
-        self.thresholds = thresholds
 
     @classmethod
     def from_fits(cls, infile):
@@ -46,11 +45,10 @@ class OverscanParameterResults:
             data = hdulist[1].data
 
             cti_results = self.asdict(data['CTI'])
-            drift_sizes = self.asdict(data['DRIFT_SIZE'])
+            drift_sizes = self.asdict(data['DRIFT_SCALE'])
             decay_times = self.asdict(data['DECAY_TIME'])
-            thresholds = self.asdict(data['THRESHOLD'])
                 
-        result = cls(sensor_id, cti_results, drift_sizes, decay_times, thresholds)
+        result = cls(sensor_id, cti_results, drift_scales, decay_times)
 
         return results
 
@@ -58,10 +56,8 @@ class OverscanParameterResults:
         
         drift_size = self.drift_sizes[ampnum]
         decay_time = self.decay_times[ampnum]
-        threshold = self.thresholds[ampnum]
-        output_amplifier = OutputAmplifier(gain, noise=noise, offset=offset,
-                                           drift_size=drift_size, decay_time=decay_time,
-                                           threshold=threshold)
+        output_amplifier = FloatingOutputAmplifier(gain, drift_scale, decay_time,
+                                                   noise=noise, offset=offset)
 
         return output_amplifier
 
@@ -85,13 +81,11 @@ class OverscanParameterResults:
         cti_results = self.cti_results
         drift_sizes = self.drift_sizes
         decay_times = self.decay_times
-        threshold = self.thresholds
 
         cols = [fits.Column(name='AMPLIFIER', array=np.arange(1, 17), format='I'),
                 fits.Column(name='CTI', array=self.asarray(cti_results), format='E'),
                 fits.Column(name='DRIFT_SIZE', array=self.asarray(drift_sizes), format='E'),
-                fits.Column(name='DECAY_TIME', array=self.asarray(decay_times), format='E'),
-                fits.Column(name='THRESHOLD', array=self.asarray(thresholds), format='E')]
+                fits.Column(name='DECAY_TIME', array=self.asarray(decay_times), format='E')]
 
         hdu = fits.BinTableHDU.from_columns(cols)
         hdulist = fits.HDUList([prihdu, hdu])
