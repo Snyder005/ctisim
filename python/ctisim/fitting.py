@@ -158,8 +158,8 @@ class OverscanFitting:
     def loglikelihood(self, params, signals, data, error, *args, **kwargs):
         """Calculate log likelihood for model."""
 
-        model = self.overscan_model(params, *args, **kwargs)
-        model_pixels = model.results(signals, start=self.start, stop=self.stop)
+        model = self.overscan_model(params, *args)
+        model_pixels = model.results(signals, start=self.start, stop=self.stop, **kwargs)
 
         inv_sigma2 = 1./(error**2.)
         diff = model_pixels-data
