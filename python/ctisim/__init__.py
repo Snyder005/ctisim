@@ -1,6 +1,6 @@
 from ctisim.core import LinearTrap
 from ctisim.core import LogisticTrap
-from ctisim.core import OutputAmplifier
+from ctisim.core import FloatingOutputAmplifier
 from ctisim.image import ImageSimulator
 from ctisim.image import SegmentSimulator
 from ctisim.utils import ITL_AMP_GEOM

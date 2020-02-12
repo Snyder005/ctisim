@@ -2,6 +2,9 @@
 """Core classes and objects.
 
 This submodule contains the core classes for use in the deferred charge simulations.
+
+To Do:
+    * Make OutputAmplifier with bias drift a subclass of a base Amplifier class.
 """
 
 import numpy as np
@@ -24,9 +27,20 @@ class SerialTrap:
     
     def __init__(self, size, emission_time, pixel):
         
+        if size <= 0.0:
+            raise ValueError('Trap size must be greater than 0.')
         self.size = size
+
+        if emission_time <= 0.0:
+            raise ValueError('Emission time must be greater than 0.')
+        if np.isnan(emission_time):
+            raise ValueError('Emission time must be real-valued number, not NaN')
         self.emission_time = emission_time
+
+        if not isinstance(pixel, int):
+            raise ValueError('Pixel must be type int.')
         self.pixel = pixel
+
         self._trap_array = None
         self._trapped_charge = None
 
@@ -63,19 +77,18 @@ class SerialTrap:
 
 class LinearTrap(SerialTrap):
 
-    parameter_keywords = ['scaling', 'threshold']
+    parameter_keywords = ['scaling']
     model_type = 'linear'
 
-    def __init__(self, size, emission_time, pixel, scaling, threshold):
+    def __init__(self, size, emission_time, pixel, scaling):
 
         super().__init__(size, emission_time, pixel)
         self.scaling = scaling
-        self.threshold = threshold
 
     def trap_charge(self, free_charge):
         """Perform charge capture using a linear function."""
         
-        captured_charge = np.clip((free_charge-self.threshold)*self.scaling,
+        captured_charge = np.clip(free_charge*self.scaling,
                                   self.trapped_charge, self._trap_array) - self.trapped_charge
         self._trapped_charge += captured_charge
 
@@ -101,7 +114,53 @@ class LogisticTrap(SerialTrap):
 
         return captured_charge
 
-class OutputAmplifier:
+class BaseOutputAmplifier:
+
+    do_local_offset = False
+
+    def __init__(self, gain, noise=0.0, global_offset=0.0):
+
+        self.gain = gain
+        self.noise = noise
+        self.global_offset = global_offset
+
+class FloatingOutputAmplifier(BaseOutputAmplifier):
+    """Object representing the readout amplifier of a single channel.
+
+    Attributes:
+        noise (float): Value of read noise [e-].
+        offset (float): Bias offset level [e-].
+        gain (float): Value of amplifier gain [e-/ADU].
+        do_bias_drift (bool): Specifies inclusion of bias drift.
+        drift_size (float): Strength of bias drift exponential.
+        drift_tau (float): Decay time constant for bias drift.
+    """
+    do_local_offset = True
+    
+    def __init__(self, gain, scale, decay_time, noise=0.0, offset=0.0):
+
+        super().__init__(gain, noise, offset)
+        self.update_parameters(scale, decay_time)
+
+    def local_offset(self, old, signal):
+        """Calculate local offset hysteresis."""
+
+        new = np.maximum(self.scale*signal, np.zeros(signal.shape))
+        
+        return np.maximum(new, old*np.exp(-1/self.decay_time))
+
+    def update_parameters(self, scale, decay_time):
+
+        if scale <= 0.0:
+            raise ValueError("Hysteresis scale must be greater than or equal to 0.")
+        self.scale = scale
+        if decay_time <= 0.0:
+            raise ValueError("Decay time must be greater than 0.")
+        if np.isnan(decay_time):
+            raise ValueError("Decay time must be real-valued number, not NaN.")
+        self.decay_time = decay_time
+
+class FloatingOutputAmplifier2(BaseOutputAmplifier):
     """Object representing the readout amplifier of a single channel.
 
     Attributes:
@@ -113,22 +172,30 @@ class OutputAmplifier:
         drift_tau (float): Decay time constant for bias drift.
         drift_threshold (float): Cut-off threshold for bias drift.
     """
+    do_local_offset = True
     
-    def __init__(self, gain, noise=0.0, offset=0.0, drift_scale=0.0, 
-                 decay_time=np.nan, threshold=0.0):
+    def __init__(self, gain, scale, decay_time, threshold, noise=0.0, offset=0.0):
 
-        self.gain = gain
-        self.noise = noise
-        self.offset = offset
-        self.drift_scale = drift_scale
-        self.decay_time = decay_time
-        self.threshold = threshold
+        super.__init__(gain, noise, offset)
+        self.update_parameters(scale, decay_time, threshold)
 
-    def offset_drift(self, drift, signal):
-        """Calculate bias value hysteresis."""
+    def local_offset(self, old, signal):
+        """Calculate local offset hysteresis."""
 
-        new_drift = np.maximum(self.drift_scale*(signal - self.threshold), 
-                               np.zeros(signal.shape))
+        new = np.maximum(self.scale*(signal - self.threshold), np.zeros(signal.shape))
         
-        return np.maximum(new_drift, drift*np.exp(-1/self.decay_time))
+        return np.maximum(new, old*np.exp(-1/self.decay_time))
+
+    def update_parameters(self, scale, decay_time, threshold):
+
+        if scale <= 0.0:
+            raise ValueError("Hysteresis scale must be greater than or equal to 0.")
+        self.scale = scale
+        if decay_time <= 0.0:
+            raise ValueError("Decay time must be greater than 0.")
+        if np.isnan(decay_time):
+            raise ValueError("Decay time must be real-valued number, not NaN.")
+        self.decay_time = decay_time
+        if threshold < 0.0:
+            raise ValueError("Threshold must be greater than 0.")
         
