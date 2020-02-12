@@ -5,9 +5,6 @@ This submodule contains function definitions to reproduce the overscan results
 due to a variety of different simplified deferred charge models.
 
 Todo:
-    * Trap Model Fitting and Overscan Fitting look very similar.  Modify to make
-      use of python inheritance.  Then the optimizer of choice (minimize or mcmc)
-      can be used using with the specific class (logprobability).
 
 """
 import numpy as np
@@ -23,6 +20,8 @@ class BaseSimpleModel:
 
         if start<1:
             raise ValueError("Start pixel must be 1 or greater.")
+        if start >= stop:
+            raise ValueError("Start pixel must be less than stop pixel.")
 
         x = np.arange(start, stop+1)
         model_results = np.zeros((signals.shape[0], x.shape[0]))
@@ -91,11 +90,24 @@ class SimulatedTrapModel:
 
         if start<1:
             raise ValueError("Start pixel must be 1 or greater.")
+        if start >= stop:
+            raise ValueError("Start pixel must be less than stop pixel.")
         imarr = np.zeros((signals.shape[0], self.amp_geom.nx))
-        ramp = SegmentSimulator(imarr, self.amp_geom.prescan_width, self.output_amplifier,
-                                cti=self.cti, traps=self.trap)
-        ramp.ramp_exp(signals)
+        
+        ## Add additional fixed parameter traps
+        try:
+            traps = kwargs['traps']
+            if isinstance(traps, list):
+                traps.append(self.trap)
+            else:
+                traps = [traps, self.trap]
+        except KeyError:
+            traps = self.trap
 
+        ## Simulate ramp readout
+        ramp = SegmentSimulator(imarr, self.amp_geom.prescan_width, self.output_amplifier,
+                                cti=self.cti, traps=traps)
+        ramp.ramp_exp(signals)
         model_results = ramp.simulate_readout(serial_overscan_width=self.amp_geom.serial_overscan_width,
                                               parallel_overscan_width=0, **kwargs)
 
