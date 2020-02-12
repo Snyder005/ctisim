@@ -9,13 +9,17 @@ Attributes:
         for LSST ITL CCD sensors. 
     E2V_AMP_GEOM (lsst.eotest.sensor.AmplifierGeometry): Segment geometry parameters
         for LSST E2V CCD sensors.
+
+To Do:
+    * Modify OverscanParameterResults to more closely mimic EOTestResults from eotest.
+    * Confirm global change of drift_size to drift_scale.
 """
 
 import numpy as np
 from astropy.io import fits
 from lsst.eotest.sensor.AmplifierGeometry import AmplifierGeometry, amp_loc
 
-from ctisim import OutputAmplifier
+from ctisim import FloatingOutputAmplifier
 
 ITL_AMP_GEOM = AmplifierGeometry(prescan=3, nx=509, ny=2000, 
                                  detxsize=4608, detysize=4096,
@@ -29,39 +33,35 @@ E2V_AMP_GEOM = AmplifierGeometry(prescan=10, nx=512, ny=2002,
 
 class OverscanParameterResults:
 
-    def __init__(self, sensor_id, cti_results, drift_sizes, decay_times, thresholds):
+    def __init__(self, sensor_id, cti_results, drift_scales, decay_times):
 
         self.sensor_id = sensor_id
         self.cti_results = cti_results
-        self.drift_sizes = drift_sizes
+        self.drift_scales = drift_scales
         self.decay_times = decay_times
-        self.thresholds = thresholds
 
     @classmethod
     def from_fits(cls, infile):
 
         with fits.open(infile) as hdulist:
             
-            sensor_id = hdulist[0].hdr['SENSORID']
+            sensor_id = hdulist[0].header['SENSORID']
             data = hdulist[1].data
 
-            cti_results = self.asdict(data['CTI'])
-            drift_sizes = self.asdict(data['DRIFT_SIZE'])
-            decay_times = self.asdict(data['DECAY_TIME'])
-            thresholds = self.asdict(data['THRESHOLD'])
+            cti_results = cls.asdict(data['CTI'])
+            drift_scales = cls.asdict(data['DRIFT_SCALE'])
+            decay_times = cls.asdict(data['DECAY_TIME'])
                 
-        result = cls(sensor_id, cti_results, drift_sizes, decay_times, thresholds)
+        result = cls(sensor_id, cti_results, drift_scales, decay_times)
 
         return results
 
     def single_output_amplifier(self, ampnum, gain, noise=0.0, offset=0.0):
         
-        drift_size = self.drift_sizes[ampnum]
+        drift_scale = self.drift_scales[ampnum]
         decay_time = self.decay_times[ampnum]
-        threshold = self.thresholds[ampnum]
-        output_amplifier = OutputAmplifier(gain, noise=noise, offset=offset,
-                                           drift_size=drift_size, decay_time=decay_time,
-                                           threshold=threshold)
+        output_amplifier = FloatingOutputAmplifier(gain, drift_scale, decay_time,
+                                                   noise=noise, offset=offset)
 
         return output_amplifier
 
@@ -83,15 +83,13 @@ class OverscanParameterResults:
         prihdu = fits.PrimaryHDU(header=hdr)
         
         cti_results = self.cti_results
-        drift_sizes = self.drift_sizes
+        drift_scales = self.drift_scales
         decay_times = self.decay_times
-        threshold = self.thresholds
 
         cols = [fits.Column(name='AMPLIFIER', array=np.arange(1, 17), format='I'),
                 fits.Column(name='CTI', array=self.asarray(cti_results), format='E'),
-                fits.Column(name='DRIFT_SIZE', array=self.asarray(drift_sizes), format='E'),
-                fits.Column(name='DECAY_TIME', array=self.asarray(decay_times), format='E'),
-                fits.Column(name='THRESHOLD', array=self.asarray(thresholds), format='E')]
+                fits.Column(name='DRIFT_SCALE', array=self.asarray(drift_scales), format='E'),
+                fits.Column(name='DECAY_TIME', array=self.asarray(decay_times), format='E')]
 
         hdu = fits.BinTableHDU.from_columns(cols)
         hdulist = fits.HDUList([prihdu, hdu])
@@ -163,6 +161,7 @@ def save_mcmc_results(sensor_id, amp, chain, outfile, trap_type):
     ctiexp_hdu = fits.ImageHDU(data=chain[:, :, 0], name='CTIEXP')
     trapsize_hdu = fits.ImageHDU(data=chain[:, :, 1], name='TRAPSIZE')
     emission_time_hdu = fits.ImageHDU(data=chain[:, :, 2], name='TAU')
+    
     hdulist = fits.HDUList([prihdu, ctiexp_hdu, trapsize_hdu, emission_time_hdu])
 
     for i in range(3, ndim):

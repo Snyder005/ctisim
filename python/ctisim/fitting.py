@@ -11,7 +11,7 @@ Todo:
 
 """
 import numpy as np
-from ctisim import OutputAmplifier, SegmentSimulator, LinearTrap, LogisticTrap
+from ctisim import FloatingOutputAmplifier, SegmentSimulator, LinearTrap, LogisticTrap
 
 class BaseSimpleModel:
 
@@ -79,18 +79,15 @@ class CTIModel(BaseSimpleModel):
 
 class SimulatedTrapModel:
 
-    def __init__(self, params, amp_geom, trap_type, output_amplifier, **kwargs):
+    def __init__(self, params, amp_geom, trap_type, output_amplifier, trap_pixel=1):
 
-        self.cti = params[0]        
+        self.cti = 10**params[0]        
         self.amp_geom = amp_geom
         self.output_amplifier = output_amplifier
-        self.do_bias_drift = kwargs.pop('do_bias_drift', False)
         self.last_pix = amp_geom.prescan_width + amp_geom.nx
-
-        trap_pixel = kwargs.pop('trap_pixel', 1)
         self.trap = trap_type(params[1], params[2], trap_pixel, *params[3:])
 
-    def results(self, signals, start=1, stop=10):
+    def results(self, signals, start=1, stop=10, **kwargs):
 
         if start<1:
             raise ValueError("Start pixel must be 1 or greater.")
@@ -100,8 +97,7 @@ class SimulatedTrapModel:
         ramp.ramp_exp(signals)
 
         model_results = ramp.simulate_readout(serial_overscan_width=self.amp_geom.serial_overscan_width,
-                                              parallel_overscan_width=0,
-                                              do_bias_drift=self.do_bias_drift)
+                                              parallel_overscan_width=0, **kwargs)
 
         return model_results[:, self.last_pix+start-1:self.last_pix+stop]
 
@@ -166,6 +162,8 @@ class OverscanFitting:
             return -np.inf
         else:
             result = lp + self.loglikelihood(params, signals, data, error, *args, **kwargs)
+            if np.isnan(result):
+                print(params)
             return result
 
     def negative_loglikelihood(self, params, signals, data, error, *args, **kwargs):
