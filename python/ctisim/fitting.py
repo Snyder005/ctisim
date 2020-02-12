@@ -11,7 +11,7 @@ Todo:
 
 """
 import numpy as np
-from ctisim import OutputAmplifier, SegmentSimulator, LinearTrap, LogisticTrap
+from ctisim import FloatingOutputAmplifier, SegmentSimulator, LinearTrap, LogisticTrap
 
 class BaseSimpleModel:
 
@@ -81,7 +81,7 @@ class SimulatedTrapModel:
 
     def __init__(self, params, amp_geom, trap_type, output_amplifier, trap_pixel=1):
 
-        self.cti = params[0]        
+        self.cti = 10**params[0]        
         self.amp_geom = amp_geom
         self.output_amplifier = output_amplifier
         self.last_pix = amp_geom.prescan_width + amp_geom.nx
@@ -162,6 +162,8 @@ class OverscanFitting:
             return -np.inf
         else:
             result = lp + self.loglikelihood(params, signals, data, error, *args, **kwargs)
+            if np.isnan(result):
+                print(params)
             return result
 
     def negative_loglikelihood(self, params, signals, data, error, *args, **kwargs):
