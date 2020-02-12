@@ -139,7 +139,7 @@ class FloatingOutputAmplifier(BaseOutputAmplifier):
     
     def __init__(self, gain, scale, decay_time, noise=0.0, offset=0.0):
 
-        super.__init__(gain, noise, offset)
+        super().__init__(gain, noise, offset)
         self.update_parameters(scale, decay_time)
 
     def local_offset(self, old, signal):
@@ -151,7 +151,7 @@ class FloatingOutputAmplifier(BaseOutputAmplifier):
 
     def update_parameters(self, scale, decay_time):
 
-        if scale =< 0.0:
+        if scale <= 0.0:
             raise ValueError("Hysteresis scale must be greater than or equal to 0.")
         self.scale = scale
         if decay_time <= 0.0:
@@ -188,7 +188,7 @@ class FloatingOutputAmplifier2(BaseOutputAmplifier):
 
     def update_parameters(self, scale, decay_time, threshold):
 
-        if scale =< 0.0:
+        if scale <= 0.0:
             raise ValueError("Hysteresis scale must be greater than or equal to 0.")
         self.scale = scale
         if decay_time <= 0.0:

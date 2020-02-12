@@ -19,7 +19,7 @@ import numpy as np
 import multiprocessing
 from astropy.io import fits
 
-from ctisim.core import OutputAmplifier, SerialTrap
+from ctisim.core import FloatingOutputAmplifier, SerialTrap
 from lsst.eotest.sensor.MaskedCCD import MaskedCCD
 
 class ImageSimulator:
@@ -41,8 +41,8 @@ class ImageSimulator:
         self.parallel_overscan_width = parallel_overscan_width
 
     @classmethod
-    def from_image_fits(cls, infile, output_amplifiers, bias_frame=bias_frame,
-                        linearity_correction=linearity_correction, cti=None, traps=None):
+    def from_image_fits(cls, infile, output_amplifiers, bias_frame=None,
+                        linearity_correction=None, cti=None, traps=None):
         """Initialize from existing FITs file."""
 
         ## Geometry information from infile
