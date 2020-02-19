@@ -8,9 +8,10 @@ Todo:
 
 """
 import numpy as np
-from ctisim import FloatingOutputAmplifier, SegmentSimulator, LinearTrap, LogisticTrap
+from ctisim import SegmentSimulator
 
 class BaseSimpleModel:
+    """Base analytic model for EPER."""
 
     def __init__(self, ctiexp, num_transfers):
         self.cti = 10**ctiexp
@@ -34,7 +35,8 @@ class BaseSimpleModel:
     def overscan_pixels(self, signal, x):
         raise NotImplementedError
 
-class FixedLossModel(BaseSimpleModel):
+class FixedLossSimpleModel(BaseSimpleModel):
+    """Analytic EPER model with fixed loss and CTI."""
 
     def __init__(self, params, num_transfers):
         super().__init__(params[0], num_transfers)
@@ -48,7 +50,8 @@ class FixedLossModel(BaseSimpleModel):
 
         return r
 
-class BiasDriftModel(BaseSimpleModel):
+class BiasDriftSimpleModel(BaseSimpleModel):
+    """Analytic EPER model with proportional loss and CTI."""
 
     def __init__(self, params, num_transfers):  
         super().__init__(params[0], num_transfers)
@@ -61,7 +64,8 @@ class BiasDriftModel(BaseSimpleModel):
 
         return r
 
-class CTIModel(BaseSimpleModel):
+class CTISimpleModel(BaseSimpleModel):
+    """Analytic EPER model with only CTI."""
 
     def __init__(self, params, num_transfers):
         
@@ -76,15 +80,16 @@ class CTIModel(BaseSimpleModel):
 
         return r
 
-class SimulatedTrapModel:
+class BaseSimulatedModel:
+    """Base model to handle simulating varying trap and CTI parameters."""
 
-    def __init__(self, params, amp_geom, trap_type, output_amplifier, trap_pixel=1):
+    def __init__(self, ctiexp, params, amp_geom, trap_type, output_amplifier, trap_pixel=1):
 
-        self.cti = 10**params[0]        
+        self.cti = 10**ctiexp
         self.amp_geom = amp_geom
         self.output_amplifier = output_amplifier
         self.last_pix = amp_geom.prescan_width + amp_geom.nx
-        self.trap = trap_type(params[1], params[2], trap_pixel, *params[3:])
+        self.trap = trap_type(params[0], params[1], trap_pixel, *params[2:])
 
     def results(self, signals, start=1, stop=10, **kwargs):
 
@@ -112,6 +117,22 @@ class SimulatedTrapModel:
                                               parallel_overscan_width=0, **kwargs)
 
         return model_results[:, self.last_pix+start-1:self.last_pix+stop]
+
+class JointSimulatedModel(BaseSimulatedModel):
+    """Simulated model with varying trap and CTI parameters."""
+
+    def __init__(self, params, amp_geom, trap_type, output_amplifier, trap_pixel=1):
+
+        super().__init__(params[0], params[1:], amp_geom, trap_type, 
+                         output_amplifier, trap_pixel=trap_pixel)
+
+class TrapSimulatedModel(BaseSimulatedModel):
+    """Simulated model with varying trap parameters and fixed CTI."""
+
+    def __init__(self, params, ctiexp, amp_geom, trap_type, output_amplifier, trap_pixel=1):
+
+        super().__init__(ctiexp, params, amp_geom, trap_type, 
+                         output_amplifier, trap_pixel=trap_pixel)
 
 class OverscanFitting:
 
