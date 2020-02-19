@@ -147,7 +147,7 @@ def save_mcmc_results(sensor_id, amp, chain, outfile, trap_type):
         model (str): Type of trap model used.
     """
 
-    steps, walkers, ndim = chain.shape
+    walkers, steps, ndim = chain.shape
 
     hdr = fits.Header()
     hdr['SENSORID'] = sensor_id
