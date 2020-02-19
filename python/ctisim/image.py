@@ -152,7 +152,7 @@ class ImageSimulator:
         segarr_dict[amp] = im
             
     def simulate_readout(self, template_file, bitpix=32, outfile='simulated_image.fits', 
-                         use_multiprocessing=False, do_bias_drift=True):
+                         use_multiprocessing=False, **kwargs):
         """Perform the serial readout of all CCD segments.
 
         This method simulates the serial readout for each segment of the CCD,
@@ -178,7 +178,8 @@ class ImageSimulator:
             manager = mp.Manager()
             segarr_dict = manager.dict()
             job = [mp.Process(target=self.segment_readout, 
-                              args=(segarr_dict, amp, do_bias_drift)) for amp in range(1, 17)]
+                              args=(segarr_dict, amp, do_bias_drift),
+                              kwargs=kwargs) for amp in range(1, 17)]
 
             _ = [p.start() for p in job]
             _ = [p.join() for p in job]
@@ -186,7 +187,7 @@ class ImageSimulator:
         else:
             segarr_dict = {}
             for amp in range(1, 17):
-                self.segment_readout(segarr_dict, amp, do_bias_drift)
+                self.segment_readout(segarr_dict, amp, do_bias_drift, **kwargs)
 
         ## Write results to FITs file
         with fits.open(template_file) as template:
