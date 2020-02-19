@@ -5,15 +5,13 @@ This submodule contains function definitions to reproduce the overscan results
 due to a variety of different simplified deferred charge models.
 
 Todo:
-    * Trap Model Fitting and Overscan Fitting look very similar.  Modify to make
-      use of python inheritance.  Then the optimizer of choice (minimize or mcmc)
-      can be used using with the specific class (logprobability).
 
 """
 import numpy as np
-from ctisim import FloatingOutputAmplifier, SegmentSimulator, LinearTrap, LogisticTrap
+from ctisim import SegmentSimulator
 
 class BaseSimpleModel:
+    """Base analytic model for EPER."""
 
     def __init__(self, ctiexp, num_transfers):
         self.cti = 10**ctiexp
@@ -23,6 +21,8 @@ class BaseSimpleModel:
 
         if start<1:
             raise ValueError("Start pixel must be 1 or greater.")
+        if start >= stop:
+            raise ValueError("Start pixel must be less than stop pixel.")
 
         x = np.arange(start, stop+1)
         model_results = np.zeros((signals.shape[0], x.shape[0]))
@@ -35,7 +35,8 @@ class BaseSimpleModel:
     def overscan_pixels(self, signal, x):
         raise NotImplementedError
 
-class FixedLossModel(BaseSimpleModel):
+class FixedLossSimpleModel(BaseSimpleModel):
+    """Analytic EPER model with fixed loss and CTI."""
 
     def __init__(self, params, num_transfers):
         super().__init__(params[0], num_transfers)
@@ -49,7 +50,8 @@ class FixedLossModel(BaseSimpleModel):
 
         return r
 
-class BiasDriftModel(BaseSimpleModel):
+class BiasDriftSimpleModel(BaseSimpleModel):
+    """Analytic EPER model with proportional loss and CTI."""
 
     def __init__(self, params, num_transfers):  
         super().__init__(params[0], num_transfers)
@@ -62,7 +64,8 @@ class BiasDriftModel(BaseSimpleModel):
 
         return r
 
-class CTIModel(BaseSimpleModel):
+class CTISimpleModel(BaseSimpleModel):
+    """Analytic EPER model with only CTI."""
 
     def __init__(self, params, num_transfers):
         
@@ -77,29 +80,59 @@ class CTIModel(BaseSimpleModel):
 
         return r
 
-class SimulatedTrapModel:
+class BaseSimulatedModel:
+    """Base model to handle simulating varying trap and CTI parameters."""
 
-    def __init__(self, params, amp_geom, trap_type, output_amplifier, trap_pixel=1):
+    def __init__(self, ctiexp, params, amp_geom, trap_type, output_amplifier, trap_pixel=1):
 
-        self.cti = 10**params[0]        
+        self.cti = 10**ctiexp
         self.amp_geom = amp_geom
         self.output_amplifier = output_amplifier
         self.last_pix = amp_geom.prescan_width + amp_geom.nx
-        self.trap = trap_type(params[1], params[2], trap_pixel, *params[3:])
+        self.trap = trap_type(params[0], params[1], trap_pixel, *params[2:])
 
     def results(self, signals, start=1, stop=10, **kwargs):
 
         if start<1:
             raise ValueError("Start pixel must be 1 or greater.")
+        if start >= stop:
+            raise ValueError("Start pixel must be less than stop pixel.")
         imarr = np.zeros((signals.shape[0], self.amp_geom.nx))
-        ramp = SegmentSimulator(imarr, self.amp_geom.prescan_width, self.output_amplifier,
-                                cti=self.cti, traps=self.trap)
-        ramp.ramp_exp(signals)
+        
+        ## Add additional fixed parameter traps
+        try:
+            traps = kwargs['traps']
+            if isinstance(traps, list):
+                traps.append(self.trap)
+            else:
+                traps = [traps, self.trap]
+        except KeyError:
+            traps = self.trap
 
+        ## Simulate ramp readout
+        ramp = SegmentSimulator(imarr, self.amp_geom.prescan_width, self.output_amplifier,
+                                cti=self.cti, traps=traps)
+        ramp.ramp_exp(signals)
         model_results = ramp.simulate_readout(serial_overscan_width=self.amp_geom.serial_overscan_width,
                                               parallel_overscan_width=0, **kwargs)
 
         return model_results[:, self.last_pix+start-1:self.last_pix+stop]
+
+class JointSimulatedModel(BaseSimulatedModel):
+    """Simulated model with varying trap and CTI parameters."""
+
+    def __init__(self, params, amp_geom, trap_type, output_amplifier, trap_pixel=1):
+
+        super().__init__(params[0], params[1:], amp_geom, trap_type, 
+                         output_amplifier, trap_pixel=trap_pixel)
+
+class TrapSimulatedModel(BaseSimulatedModel):
+    """Simulated model with varying trap parameters and fixed CTI."""
+
+    def __init__(self, params, ctiexp, amp_geom, trap_type, output_amplifier, trap_pixel=1):
+
+        super().__init__(ctiexp, params, amp_geom, trap_type, 
+                         output_amplifier, trap_pixel=trap_pixel)
 
 class OverscanFitting:
 
@@ -146,8 +179,8 @@ class OverscanFitting:
     def loglikelihood(self, params, signals, data, error, *args, **kwargs):
         """Calculate log likelihood for model."""
 
-        model = self.overscan_model(params, *args, **kwargs)
-        model_pixels = model.results(signals, start=self.start, stop=self.stop)
+        model = self.overscan_model(params, *args)
+        model_pixels = model.results(signals, start=self.start, stop=self.stop, **kwargs)
 
         inv_sigma2 = 1./(error**2.)
         diff = model_pixels-data
