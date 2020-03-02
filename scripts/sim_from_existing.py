@@ -1,11 +1,11 @@
-from ctisim import LinearTrap, LogisticTrap, OutputAmplifier, ImageSimulator
+from ctisim import LinearTrap, LogisticTrap, FloatingOutputAmplifier, ImageSimulator
 from astropy.io import fits
 import numpy as np
 import argparse
 import os
 from os.path import join
 
-def main(infile, mcmc_results, output_dir='./', bias_frame=None):
+def main(infile, output_dir='./', bias_frame=None):
 
     ## Output filename
     basename = os.path.basename(infile)[:-5]
@@ -16,36 +16,53 @@ def main(infile, mcmc_results, output_dir='./', bias_frame=None):
     traps_dict = {}
     cti_dict = {}
 
-    mcmc_results = fits.open('../examples/data/ITL_overscan_mcmc_results.fits')
-    mcmc_data = mcmc_results[1].data
+    ## Overscan Results
+    oscan_results = fits.open('/nfs/slac/g/ki/ki19/lsst/snyder18/LSST/Data/BOT/6790D_linearity/R20/S02/R20_S02_overscan_fit_results.fits')
+    decay_times = oscan_results[1].data['DECAY_TIME']
+    drift_scales = oscan_results[1].data['DRIFT_SIZE']
 
     for amp in range(1, 17):
 
-        ## Trap parameters
-        cti = mcmc_data['CTI'][amp-1]
-        cti_dict[amp] = cti
-        size = mcmc_data['TRAP_SIZE'][amp-1]
-        if size == 0.0:
-            traps_dict[amp] = None
-        else:
-            emission_time = mcmc_data['TRAP_TAU'][amp-1]
-            scaling = mcmc_data['TRAP_DFACTOR'][amp-1]
-            trap = LinearTrap(size, emission_time, 1, scaling, 0.0)
-            if amp == 7:
-                new_trap = LogisticTrap(40, 0.5, 1, 18000., 0.0010)
-                traps_dict[amp] = [trap, new_trap]
-            else:
-                traps_dict[amp] = trap
+        try:
+            output_amps[amp] = FloatingOutputAmplifier(1.0, drift_scales[amp-1]/10000.,
+                                                       decay_times[amp-1], noise=0.0, offset=0.0)
+        except:
+            output_amps[amp] = FloatingOutputAmplifier(1.0, 2.4/10000., 2.0, noise=0.0, offset=0.0)
 
-        ## Bias hysteresis parameters
-        drift_scale = mcmc_data['DRIFT_SIZE'][amp-1]
-        decay_time = mcmc_data['DRIFT_TAU'][amp-1]
-        threshold = mcmc_data['DRIFT_THRESHOLD'][amp-1]
-        output_amps[amp] = OutputAmplifier(1.0, 6.5, offset=0.0, drift_scale=drift_scale,
-                                           decay_time=decay_time, threshold=threshold)
-    
-    imsim = ImageSimulator.image_from_fits(infile, output_amps, cti_dict=cti_dict,
-                                           traps_dict=traps_dict, 
+        ## Add low signal traps
+        try:
+            low_results = fits.open('/nfs/slac/g/ki/ki19/lsst/snyder18/LSST/lsst-camera-dh/ctisim/examples/output/R20_S02_Amp{0}_lowtrap_mcmc.fits'.format(amp))
+
+            cti_chain = low_results[1].data
+            trapsize_chain = low_results[2].data
+            emission_time_chain = low_results[3].data
+            scaling_chain = low_results[4].data
+            cti_dict[amp] = 10**np.median(cti_chain[:, 500:])
+            traps_dict[amp] = [LinearTrap(np.median(trapsize_chain[:, 500:]),
+                                          np.median(emission_time_chain[:, 500:]), 1,
+                                          np.median(scaling_chain[:, 500:]))]
+        except:
+            traps_dict[amp] = None
+            cti_dict[amp] = 1.E-6 ## Change this with actual CTI values
+
+        ## Add high signal traps
+        try:
+            high_results = fits.open('/nfs/slac/g/ki/ki19/lsst/snyder18/LSST/lsst-camera-dh/ctisim/examples/output/R20_S02_Amp{0}_medtrap_mcmc.fits'.format(amp))
+
+            trapsize_chain = high_results[1].data
+            emission_time_chain = high_results[2].data
+            f0_chain = high_results[3].data
+            k_chain = high_results[4].data
+            
+            traps_dict[amp].append(LogisticTrap(np.median(trapsize_chain[:, 500:]),
+                                                np.median(emission_time_chain[:, 500:]), 1,
+                                                np.median(f0_chain[:, 500:]),
+                                                np.median(k_chain[:, 500:])))
+        except:
+            pass
+
+    imsim = ImageSimulator.from_image_fits(infile, output_amps, cti=cti_dict,
+                                           traps=traps_dict, 
                                            bias_frame=bias_frame)
     imarr_results = imsim.simulate_readout(infile, 
                                            outfile=outfile)
@@ -54,11 +71,9 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('infile', type=str, help='Existing FITs file image.')
-    parser.add_argument('mcmc_results', type=str)
     parser.add_argument('--output_dir', '-o', type=str, default='./')
     args = parser.parse_args()
 
     infile = args.infile
-    mcmc_results = args.mcmc_results
     output_dir = args.output_dir
-    main(infile, mcmc_results, output_dir=output_dir)
+    main(infile, output_dir=output_dir)

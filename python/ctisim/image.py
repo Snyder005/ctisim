@@ -136,7 +136,7 @@ class ImageSimulator:
         for i in range(1, 17):            
             self.segments[i].flatfield_exp(signal, noise=noise)
 
-    def segment_readout(self, segarr_dict, amp, do_bias_drift=True):
+    def segment_readout(self, segarr_dict, amp, **kwargs):
         """Simulate readout of a single segment.
 
         This method is to facilitate the use of multiprocessing when reading out 
@@ -148,7 +148,7 @@ class ImageSimulator:
         """
         im = self.segments[amp].simulate_readout(serial_overscan_width=self.serial_overscan_width,
                                                  parallel_overscan_width=self.parallel_overscan_width,
-                                                 do_bias_drift=do_bias_drift)
+                                                 **kwargs)
         segarr_dict[amp] = im
             
     def simulate_readout(self, template_file, bitpix=32, outfile='simulated_image.fits', 
@@ -187,7 +187,7 @@ class ImageSimulator:
         else:
             segarr_dict = {}
             for amp in range(1, 17):
-                self.segment_readout(segarr_dict, amp, do_bias_drift, **kwargs)
+                self.segment_readout(segarr_dict, amp, **kwargs)
 
         ## Write results to FITs file
         with fits.open(template_file) as template:
