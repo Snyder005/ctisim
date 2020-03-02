@@ -41,7 +41,7 @@ def main(sensor_id, amp, nsteps, nwalkers):
     output_amplifier = FloatingOutputAmplifier(1.0, drift_scales[amp-1]/10000., decay_times[amp-1], noise=0.0, offset=0.0)
 
     ## Low signal trapping
-    mcmc_results = fits.open('/nfs/slac/g/ki/ki19/lsst/snyder18/LSST/lsst-camera-dh/ctisim/examples/output/R20_S02_Amp9_lowtrap_mcmc.fits')
+    mcmc_results = fits.open('/nfs/slac/g/ki/ki19/lsst/snyder18/LSST/lsst-camera-dh/ctisim/examples/output/R20_S02_Amp{0}_lowtrap_mcmc.fits'.format(amp))
 
     cti_chain = mcmc_results[1].data
     trapsize_chain = mcmc_results[2].data
@@ -54,8 +54,10 @@ def main(sensor_id, amp, nsteps, nwalkers):
 
     ## MCMC Fit
     ctiexp = np.log10(cti)
-    params0 = (4., 0.5, 12500., 0.0025)
-    constraints = [(0, 10.), (0.01, 1.0), (11000., 15000.), (0.0001, 0.004)]
+#    params0 = (4., 0.5, 12500., 0.0025)
+#    constraints = [(0, 10.), (0.01, 1.0), (11000., 15000.), (0.0001, 0.004)]
+    params0 = (37., 0.5, 17700., 0.001)
+    constraints = [(30., 45.), (0.01, 1.0), (15000., 19000.), (0.0001, 0.004)]
 
     overscan_fitting = OverscanFitting(params0, constraints, TrapSimulatedModel, start=1, stop=5)
 
