@@ -150,6 +150,7 @@ class FloatingOutputAmplifier(BaseOutputAmplifier):
         return np.maximum(new, old*np.exp(-1/self.decay_time))
 
     def update_parameters(self, scale, decay_time):
+        """Update parameter values, if within acceptable values."""
 
         if scale <= 0.0:
             raise ValueError("Hysteresis scale must be greater than or equal to 0.")
