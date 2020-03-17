@@ -1,4 +1,5 @@
 from ctisim import LinearTrap, LogisticTrap, FloatingOutputAmplifier, ImageSimulator
+from ctisim.utils import OverscanParameterResults
 from astropy.io import fits
 import numpy as np
 import argparse
@@ -17,15 +18,13 @@ def main(infile, output_dir='./', bias_frame=None):
     cti_dict = {}
 
     ## Overscan Results
-    oscan_results = fits.open('/nfs/slac/g/ki/ki19/lsst/snyder18/LSST/Data/BOT/6790D_linearity/R20/S02/R20_S02_overscan_fit_results.fits')
-    decay_times = oscan_results[1].data['DECAY_TIME']
-    drift_scales = oscan_results[1].data['DRIFT_SIZE']
+    parameter_results_file = '/nfs/slac/g/ki/ki19/lsst/snyder18/LSST/Data/BOT/6790D_linearity/R20/S02/R20_S02_parameter_results.fits'
+    parameter_results = OverscanParameterResults.from_fits(parameter_results_file)
 
     for amp in range(1, 17):
 
         try:
-            output_amps[amp] = FloatingOutputAmplifier(1.0, drift_scales[amp-1]/10000.,
-                                                       decay_times[amp-1], noise=0.0, offset=0.0)
+            output_amps[amp] = parameter_results.single_output_amplifier(amp, 1.0)
         except:
             output_amps[amp] = FloatingOutputAmplifier(1.0, 2.4/10000., 2.0, noise=0.0, offset=0.0)
 
@@ -43,7 +42,7 @@ def main(infile, output_dir='./', bias_frame=None):
                                           np.median(scaling_chain[:, 500:]))]
         except:
             traps_dict[amp] = None
-            cti_dict[amp] = 1.E-6 ## Change this with actual CTI values
+            cti_dict[amp] = parameter_results.cti_results[amp]
 
         ## Add high signal traps
         try:

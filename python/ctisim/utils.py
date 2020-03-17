@@ -51,12 +51,13 @@ class OverscanParameterResults:
             cti_results = cls.asdict(data['CTI'])
             drift_scales = cls.asdict(data['DRIFT_SCALE'])
             decay_times = cls.asdict(data['DECAY_TIME'])
-                
-        result = cls(sensor_id, cti_results, drift_scales, decay_times)
+
+        results = cls(sensor_id, cti_results, drift_scales, decay_times)
 
         return results
 
     def single_output_amplifier(self, ampnum, gain, noise=0.0, offset=0.0):
+        """Return a single output amplifier, given stored fit parameters."""
         
         drift_scale = self.drift_scales[ampnum]
         decay_time = self.decay_times[ampnum]
@@ -66,6 +67,7 @@ class OverscanParameterResults:
         return output_amplifier
 
     def all_output_amplifiers(self, gain_dict, noise_dict, offset_dict):
+        """Return all output amplifier, given stored fit parameters."""
 
         output_amplifiers = {}
         for ampnum in range(1, 17):

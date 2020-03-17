@@ -2,7 +2,7 @@ import numpy as np
 import argparse
 import subprocess
 
-def main(infiles, mcmc_results, output_dir='./'):
+def main(infiles, output_dir='./'):
     
     for i, infile in enumerate(infiles):
 
@@ -20,6 +20,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     infiles = args.infiles
-    mcmc_results = args.mcmc_results
     output_dir = args.output_dir
-    main(infiles, mcmc_results, output_dir=output_dir)
+    main(infiles, output_dir=output_dir)

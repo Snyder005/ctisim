@@ -22,65 +22,82 @@ CCD_NAMES = ['S00', 'S01', 'S02',
 
 def main(directory):
 
+    ## Config variables
     start = 1
-    stop = 3
+    stop = 4
+    ccd_type = 'itl'
+    max_signal = 5000.
+    read_noise = 7.0
 
     num_failures = 0
     for raft_name in ['R20']:
         
         raft_output_dir = join(directory, raft_name)
         
-        for ccd_name in CCD_NAMES[:1]:
+        for ccd_name in ['S02']:
 
+            ## Get existing overscan analysis results
             ccd_output_dir = join(directory, raft_name, ccd_name)
             sensor_id = '{0}_{1}'.format(raft_name, ccd_name)
-
             try:
-                hdul = fits.open(join(ccd_output_dir, 
+                hdulist = fits.open(join(ccd_output_dir, 
                                       '{0}_overscan_results.fits'.format(sensor_id)))
             except FileNotFoundError:
                 continue
-
             try:
-                oscan_fit_results = fits.open('{0}_overscan_fit_results.fits'.format(sensor_id))
+                parameter_results_file = os.path.join(ccd_output_dir, 
+                                                      '{0}_parameter_results.fits'.format(sensor_id))
+                parameter_results = OverscanParameterResults.from_fits(parameter_results_file)
             except FileNotFoundError:
                 continue
 
-            for i in range(1, 17):
+            cti_results = {i : 0.0 for i in range(1, 17)}
 
+            ## CCD geometry info
+            if ccd_type == 'itl':
                 ncols = ITL_AMP_GEOM.nx + ITL_AMP_GEOM.prescan_width
+            if ccd_type == 'e2v':
+                ncols = E2V_AMP_GEOM.nx + E2V_AMP_GEOM.prescan_width
+    
+            for amp in range(1, 17):
 
-                noise = 7.5/np.sqrt(2000.)
-                hdu_data = hdul[i].data
-                signal_all = hdu_data['FLATFIELD_SIGNAL']
-                oscan_data_all = hdu_data['COLUMN_MEAN'][:, ncols+start-1:ncols+stop]
+                signals_all = hdulist[amp].data['FLATFIELD_SIGNAL']
+                data_all = hdulist[amp].data['COLUMN_MEAN'][:, start:stop+1]
+                indices = (signals_all < max_signal)
+                signals = signals_all[indices]
+                data = data_all[indices]
 
-                indices = (signal_all < 5000.)
-                signals = signal_all[indices]
-                oscandata = oscan_data_all[indices]
+                output_amplifier = parameter_results.single_output_amplifier(amp, 1.)
+                drift_scale = output_amplifier.scale*10000.
+                decay_time = output_amplifier.decay_time
 
-                ## Get previous high signal fit results
-                drift_scale = oscan_fit_results[1].data['DRIFT_SCALE'][i-1]
-                decay_time = oscan_fit_results[1].data['DECAY_TIME'][i-1]
+                params0 = [-6., drift_scale, decay_time]
+                constraints = [(-6.8, -5.5), (drift_scale, drift_scale), (decay_time, decay_time)]
 
-                params0 = [-6.0, drift_scale, decay_time]
-                constraints = [(-6.8, -5.3), (drift_scale, drift_scale), (decay_time, decay_time)]
-                fitting_task = OverscanFitting(params0, constraints, BiasDriftSimpleModel, 
+                fitting_task = OverscanFitting(params0, constraints, BiasDriftSimpleModel,
                                                start=start, stop=stop)
-                fit_results = scipy.optimize.minimize(fitting_task.negative_loglikelihood, 
-                                                      params0, 
-                                                      args=(signals, oscandata, noise, ncols),
+                fit_results = scipy.optimize.minimize(fitting_task.negative_loglikelihood,
+                                                      params0,
+                                                      args=(signals, data, read_noise/np.sqrt(2000.), ncols),
                                                       bounds=constraints, method='SLSQP')
 
-                success = fit_results.success
-                if success:
-                    ctiexp, drift_scale, decay_time = fit_results.x
-                    print(sensor_id, i, ctiexp)
-#                    oscan_fit_results[1].data['CTI'][ = 10**ctiexp
-                else:
+                if not fit_results.success:
                     num_failures += 1
-                    print(sensor_id, i)
+                    print(sensor_id, amp)
                     print(fit_results)
+                else:
+                    ctiexp, drift_scale, decay_time = fit_results.x
+                    if  ctiexp > -5.6:
+                        print(sensor_id, amp)
+                        print("Flagged for MCMC.")
+                    else:
+                        cti_results[amp] = 10**ctiexp
+                        print(ctiexp, drift_scale, decay_time)
+
+            parameter_results.cti_results = cti_results
+            parameter_results.write_fits(parameter_results_file, overwrite=True)
+
+    print('There were {0} failures in the overscan fit'.format(num_failures))
 
 if __name__ == '__main__':
 
