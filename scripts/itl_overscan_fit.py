@@ -19,7 +19,6 @@ RAFT_NAMES = ['R01', 'R02', 'R03',
 CCD_NAMES = ['S00', 'S01', 'S02',
              'S10', 'S11', 'S12',
              'S20', 'S21', 'S22',]
-
 def main(directory):
 
     ## Config variables
@@ -29,6 +28,7 @@ def main(directory):
     max_signal = 140000.
     min_signal = 20000.
     read_noise = 7.0
+
 
     num_failures = 0
     for raft_name in RAFT_NAMES:
@@ -43,6 +43,7 @@ def main(directory):
             try:
                 hdulist = fits.open(join(ccd_output_dir, 
                                          '{0}_overscan_results.fits'.format(sensor_id)))
+
             except FileNotFoundError:
                 continue
 
@@ -90,6 +91,7 @@ def main(directory):
 
     print('There were {0} failures in the overscan fit'.format(num_failures))
 
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
@@ -98,3 +100,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     main(args.directory)
+

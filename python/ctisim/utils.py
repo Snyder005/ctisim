@@ -51,8 +51,8 @@ class OverscanParameterResults:
             cti_results = cls.asdict(data['CTI'])
             drift_scales = cls.asdict(data['DRIFT_SCALE'])
             decay_times = cls.asdict(data['DECAY_TIME'])
-
         results = cls(sensor_id, cti_results, drift_scales, decay_times)
+
 
         return results
 
@@ -68,6 +68,7 @@ class OverscanParameterResults:
 
     def all_output_amplifiers(self, gain_dict, noise_dict, offset_dict):
         """Return all output amplifier, given stored fit parameters."""
+
 
         output_amplifiers = {}
         for ampnum in range(1, 17):
@@ -96,7 +97,7 @@ class OverscanParameterResults:
         hdu = fits.BinTableHDU.from_columns(cols)
         hdulist = fits.HDUList([prihdu, hdu])
         hdulist.writeto(outfile, **kwargs)
-
+        
     @staticmethod
     def asarray(param_dict):
         
