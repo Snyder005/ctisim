@@ -146,13 +146,13 @@ class ImageSimulator:
             segarr_dict ('dict' of 'numpy.array'): Dictionary of array results.
             amp (int): Amplifier number.
         """
-        im = self.segments[amp].simulate_readout(serial_overscan_width=self.serial_overscan_width,
-                                                 parallel_overscan_width=self.parallel_overscan_width,
-                                                 **kwargs)
+        im = self.segments[amp].readout(serial_overscan_width=self.serial_overscan_width,
+                                        parallel_overscan_width=self.parallel_overscan_width,
+                                        **kwargs)
         segarr_dict[amp] = im
             
-    def simulate_readout(self, template_file, bitpix=32, outfile='simulated_image.fits', 
-                         use_multiprocessing=False, **kwargs):
+    def image_readout(self, template_file, bitpix=32, outfile='simulated_image.fits', 
+                use_multiprocessing=False, **kwargs):
         """Perform the serial readout of all CCD segments.
 
         This method simulates the serial readout for each segment of the CCD,
@@ -203,7 +203,7 @@ class ImageSimulator:
             
         return segarr_dict
 
-    def update_all_parameters(self, parameter_results):
+    def update_image_parameters(self, parameter_results):
         """Update CTI and output amplifier parameters for all segments."""
 
         for ampnum in range(1, 17):
@@ -218,7 +218,9 @@ class ImageSimulator:
         threshold = parameter_results.thresholds[ampnum]
 
         self.segments[i].cti = cti
-        self.segments[i].output_amplifier.update_parameters(drift_scale, decay_time, threshold)
+        self.segments[i].output_amplifier.update_parameters(drift_scale, 
+                                                            decay_time, 
+                                                            threshold)
     
     @staticmethod
     def set_bitpix(hdu, bitpix):
@@ -324,7 +326,8 @@ class SegmentSimulator:
         for i in range(num_fe55_hits):
             
             stamp = self.sim_fe55_hit(random_seed=random_seed, stamp_length=stamp_length,
-                                      psf_fwhm=psf_fwhm, hit_flux=hit_flux, hit_hlr=hit_hlr).array
+                                      psf_fwhm=psf_fwhm, hit_flux=hit_flux, 
+                                      hit_hlr=hit_hlr).array
             sy, sx = stamp.shape
 
             y0 = np.random.randint(0, self.ny-sy)
@@ -373,8 +376,7 @@ class SegmentSimulator:
 
         self.array[:, self.prescan_width:] = 0.0
 
-    def simulate_readout(self, serial_overscan_width=10, parallel_overscan_width=0,
-                         **kwargs):
+    def readout(self, serial_overscan_width=10, parallel_overscan_width=0, **kwargs):
         """Simulate serial readout of the segment image.
 
         This method performs the serial readout of a segment image given the
