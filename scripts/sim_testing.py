@@ -1,7 +1,7 @@
 import os
 import argparse
 from ctisim import LinearTrap, LogisticTrap, ImageSimulator
-from ctisim.core import BaseOutputAmplifier
+from ctisim import BaseOutputAmplifier
 
 def main(sensor_id, infile, output_dir='./', bias_frame=None):
 
@@ -18,7 +18,7 @@ def main(sensor_id, infile, output_dir='./', bias_frame=None):
     imsim = ImageSimulator.from_image_fits(infile, output_amps, 
                                            cti=cti_dict, traps=traps_dict,
                                            bias_frame=bias_frame)
-    imarr_results = imsim.simulate_readout(infile, outfile=outfile)
+    imarr_results = imsim.image_readout(infile, outfile=outfile)
 
 if __name__ == '__main__':
 
