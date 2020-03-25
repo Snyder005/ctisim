@@ -21,7 +21,7 @@ corresponding to an ITL CCD segment.
 """
 
 from ctisim import ITL_AMP_GEOM
-from ctisim import SegmentSimulator, OutputAmplifier
+from ctisim import SegmentSimulator, BaseOutputAmplifier
 from ctisim.utils import calculate_cti
 import argparse
 
@@ -31,8 +31,8 @@ def main(cti):
     serial_overscan_width = amp_geom.serial_overscan_width
     last_pixel = amp_geom.nx + amp_geom.prescan_width - 1
 
-    # Create an OutputAmplifier object with 6.5 electrons of noise.
-    output_amplifier = OutputAmplifier(1.0, 6.5)
+    # Create a BaseOutputAmplifier object with 6.5 electrons of noise.
+    output_amplifier = BaseOutputAmplifier(1.0, noise=6.5)
 
     # Create a SegmentSimulator object using `from_amp_geom()` method.
     # This method constructs a SegmentSimulator from a dictionary
@@ -41,10 +41,9 @@ def main(cti):
     segment = SegmentSimulator.from_amp_geom(amp_geom, output_amplifier, cti=cti)
     segment.flatfield_exp(50000)
 
-    # The `serial_readout()` method creates the final image.
+    # The `readout()` method creates the final image.
     print("Simulating readout with CTI: {0:.1E}".format(cti))
-    seg_imarr = segment.simulate_readout(serial_overscan_width = serial_overscan_width,
-                                         do_bias_drift = False)
+    seg_imarr = segment.readout(serial_overscan_width=serial_overscan_width)
 
     ## Calculate CTI using the `calculate_cti()` utility function.
     result = calculate_cti(seg_imarr, last_pixel, num_overscan_pixels=2)

@@ -9,6 +9,7 @@ Todo:
 """
 import numpy as np
 from ctisim import SegmentSimulator
+from ctisim import LinearTrap, LogisticTrap, FloatingOutputAmplifier
 
 class BaseSimpleModel:
     """Base analytic model for EPER."""
@@ -113,8 +114,8 @@ class BaseSimulatedModel:
         ramp = SegmentSimulator(imarr, self.amp_geom.prescan_width, self.output_amplifier,
                                 cti=self.cti, traps=traps)
         ramp.ramp_exp(signals)
-        model_results = ramp.simulate_readout(serial_overscan_width=self.amp_geom.serial_overscan_width,
-                                              parallel_overscan_width=0, **kwargs)
+        model_results = ramp.readout(serial_overscan_width=self.amp_geom.serial_overscan_width,
+                                     parallel_overscan_width=0, **kwargs)
 
         return model_results[:, self.last_pix+start-1:self.last_pix+stop]
 
@@ -133,6 +134,36 @@ class TrapSimulatedModel(BaseSimulatedModel):
 
         super().__init__(ctiexp, params, amp_geom, trap_type, 
                          output_amplifier, trap_pixel=trap_pixel)
+
+class FullSimulatedModel:
+
+    def __init__(self, params, amp_geom, trap_pixel=1):
+
+        self.cti = 10**params[0]
+        self.amp_geom = amp_geom
+        self.output_amplifier = FloatingOutputAmplifier(1.0, params[1], params[2],
+                                                        noise=0.0, offset=0.0)
+        self.last_pix = amp_geom.prescan_width + amp_geom.nx
+        self.traps = [LinearTrap(params[3], params[8], trap_pixel, params[4]),
+                      LogisticTrap(params[5], params[8], trap_pixel,
+                                   params[6], params[7])]
+
+    def results(self, signals, start=1, stop=10, **kwargs):
+
+        if start<1:
+            raise ValueError("Start pixel must be 1 or greater.")
+        if start >= stop:
+            raise ValueError("Start pixel must be less than stop pixel.")
+        imarr = np.zeros((signals.shape[0], self.amp_geom.nx))
+
+        ## Simulate ramp readout
+        ramp = SegmentSimulator(imarr, self.amp_geom.prescan_width, self.output_amplifier,
+                                cti=self.cti, traps=self.traps)
+        ramp.ramp_exp(signals)
+        model_results = ramp.readout(serial_overscan_width=self.amp_geom.serial_overscan_width,
+                                     parallel_overscan_width=0, **kwargs)
+
+        return model_results[:, self.last_pix+start-1:self.last_pix+stop]
 
 class OverscanFitting:
 
@@ -200,5 +231,30 @@ class OverscanFitting:
             return result
 
     def negative_loglikelihood(self, params, signals, data, error, *args, **kwargs):
+        """Calculate the negative log likelihood of the model, given the data."""
         
         return -self.loglikelihood(params, signals, data, error, *args, **kwargs)
+
+    def rms_error(self, params, signals, data, error, *args, **kwargs):
+        """Calculate the RMS error between model and data."""
+
+        model = self.overscan_model(params, *args)
+        model_pixels = model.results(signals, start=self.start, stop=self.stop, **kwargs)
+
+        inv_sigma2 = 1./(error**2.)
+        diff = model_pixels-data
+
+        rms = np.sqrt(np.mean(np.square(diff)))
+
+        return rms
+
+    def difference(self, params, signals, data, error, *args, **kwargs):
+        """Calculate the flattened difference array between model and data."""
+
+        model = self.overscan_model(params, *args)
+        model_pixels = model.results(signals, start=self.start, stop=self.stop, **kwargs)
+
+        inv_sigma2 = 1./(error**2.)
+        diff = (model_pixels-data).flatten()
+
+        return diff

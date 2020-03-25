@@ -32,27 +32,27 @@ from astropy.io import fits
 from os.path import join
 
 from ctisim import ITL_AMP_GEOM
-from ctisim import OutputAmplifier, ImageSimulator
+from ctisim import BaseOutputAmplifier, ImageSimulator
 
 def main(template_file, cti, signal, output_dir='./output'):
 
     # Each segment needs its own ReadoutAmplifier and SerialRegister object.
     # For this example they will all be the same.
-    output_amplifiers = {amp : OutputAmplifier(1.0, 6.5) for amp in range(1, 17)}
+    output_amplifiers = {amp : BaseOutputAmplifier(1.0, noise=6.5) for amp in range(1, 17)}
+    cti = {amp : cti for amp in range(1, 17)}
 
     # Create an ImageSimulator object given amplifier geometry dictionary and
     # dictionaries containing the ReadoutAmplifier and SerialRegister objects.
     print("Simulating flat field image with signal: {0:.1f} electrons".format(signal))
-    imagesim = ImageSimulator.from_amp_geom(ITL_AMP_GEOM, output_amplifiers)
+    imagesim = ImageSimulator.from_amp_geom(ITL_AMP_GEOM, output_amplifiers, cti=cti)
     imagesim.flatfield_exp(signal)
     
     # Simulate the serial readout.
     # For a simulate image this always generates an output file.
     print("Simulating readout with CTI: {0:.1E}".format(cti))
     outfile = join(output_dir, 'example_image.fits')
-    imarr_results = imagesim.simulate_readout(template_file, 
-                                              outfile=join(output_dir, 'example2_image.fits'),
-                                              do_bias_drift=False)    
+    imarr_results = imagesim.image_readout(template_file, 
+                                           outfile=join(output_dir, 'example2_image.fits'))    
     print("Output file: {0}".format(outfile))
     
 if __name__ == '__main__':
