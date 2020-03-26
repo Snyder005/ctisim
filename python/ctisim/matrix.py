@@ -17,64 +17,56 @@ def cti_operator(cti, ncols):
 
     return D
 
-def one_trap_operator_new(pixel_signals, trapsize, scaling, tau):
-    """Calculate a linear operator for charge trapping."""
-    
-    r = np.exp(-1/tau)
-
-    def f(pixel_signals):
-
-        return np.minimum(trapsize, pixel_signals*scaling)
-    
-    S_estimate = pixel_signals + f(pixel_signals)
-
-    T = -f(S_estimate)
-    T[:, 1:] += (1-r)*f(S_estimate)[:, :-1]
-    T[:, 2:] += r*(1-r)*f(S_estimate[:, :-2])
-    
-    return T
-
-def one_trap_operator(pixel_signals, trapsize, scaling):
-    """Calculate a linear operator for charge trapping."""
-    
-    def f(pixel_signals):
-
-        return np.minimum(trapsize, pixel_signals*scaling)
-    
-    S_estimate = pixel_signals + f(pixel_signals)
-
-    T = -f(S_estimate)
-    T[:, 1:] += f(S_estimate)[:, :-1]
-#    T[:, 2:] += r*(1-r)*f(S_estimate[:, :-2])
-    
-    return T
-
-def two_trap_operator_new(pixel_signals, trapsize1, scaling, trapsize2, f0, k, tau):
+def linear_trap_operator(pixel_signals, trapsize, scaling, tau):
 
     r = np.exp(-1/tau)
 
     def f(pixel_signals):
 
-        return np.minimum(trapsize1, pixel_signals*scaling) + trapsize2/(1.+np.exp(-k*(pixel_signals-f0)))
-    
+        return np.minimum(trapsize, pixel_signals*scaling)
+
+    r = np.exp(-1/tau)
     S_estimate = pixel_signals + f(pixel_signals)
 
-    T = -f(S_estimate)*r
-    T[:, 1:] += (1-r)*f(S_estimate)[:, :-1]
-    T[:, 2:] += r*(1-r)*f(S_estimate[:, :-2])
+    C = f(S_estimate)
+    R = np.zeros(C.shape)
+    R[:, 1:] = f(S_estimate)[:,:-1]*(1-r)
+    R[:, 2:] += np.maximum(0, (f(S_estimate[:, :-2])-f(S_estimate[:, 1:-1]))*r*(1-r))
+    T = R - C
     
     return T
 
-def two_trap_operator(pixel_signals, trapsize1, scaling, trapsize2, f0, k):
-
+def two_trap_operator(pixel_signals, trapsize1, scaling, trapsize2, f0, k, tau):
+    
     def f(pixel_signals):
 
         return np.minimum(trapsize1, pixel_signals*scaling) + trapsize2/(1.+np.exp(-k*(pixel_signals-f0)))
     
+    r = np.exp(-1/tau)
     S_estimate = pixel_signals + f(pixel_signals)
-
-    T = -f(S_estimate)
-    T[:, 1:] += f(S_estimate)[:, :-1]
+    
+    C = f(S_estimate)
+    R = np.zeros(C.shape)
+    R[:, 1:] = f(S_estimate)[:,:-1]*(1-r)
+    R[:, 2:] += np.maximum(0, (f(S_estimate[:, :-2])-f(S_estimate[:, 1:-1]))*r*(1-r))
+    T = R - C
     
     return T
+
+def amplifier_operator(pixel_signals, scale, tau, num_previous_pixels=4):
+
+    r = np.exp(-1/tau)
+
+    ny, nx = pixel_signals.shape
+
+    offset = np.zeros((num_previous_pixels, ny, nx))
+    offset[0, :, :] = scale*pixel_signals[:, :]*r
+
+    for n in range(1, num_previous_pixels):
+        offset[n, :, n:] = scale*pixel_signals[:, :-n]*(r**(n+1))
+
+    E = np.amax(offset, axis=0)
+
+    return E
+        
 

@@ -4,7 +4,10 @@
 This submodule contains the core classes for use in the deferred charge simulations.
 
 To Do:
-    * Make OutputAmplifier with bias drift a subclass of a base Amplifier class.
+    * Change the initialize. Traps should not carry a pixel array dependent on
+      unknown amplifier geometry.
+    * Modify so that each trap has a trapping function that can be used for the
+      trapping operator in the correction scheme.
 """
 
 import numpy as np
@@ -111,6 +114,24 @@ class LogisticTrap(SerialTrap):
         captured_charge = np.clip(self._trap_array/(1.+np.exp(-self.k*(free_charge-self.f0))),
                                   self.trapped_charge, self._trap_array) - self.trapped_charge
         self._trapped_charge += captured_charge
+
+        return captured_charge
+
+class SplineTrap(SerialTrap):
+
+    parameter_keywords = None
+    model_type = 'spline'
+
+    def __init__(self, interpolant, emission_time, pixel):
+
+        super().__init__(self, 200000., emission_time, pixel):
+        self.f = interpolant
+
+    def trap_charge(self, free_charge):
+        """Perform charge capture using a spline interoplated function."""
+
+        captured_charge = np.clip(self.f(free_charge), 
+                                  self.trapped_charge, self.free_charge) - self.trapped_charge
 
         return captured_charge
 
