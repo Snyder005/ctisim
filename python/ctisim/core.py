@@ -74,8 +74,18 @@ class SerialTrap:
 
         return released_charge
 
-    def trap_charge(self):
-        """Capture charge according to trapping function and parameters."""
+    def trap_charge(self, free_charge):
+        """Perform charge capture using a logistic function."""
+
+        captured_charge = np.clip(self.f(free_charge), self.trapped_charge, 
+                                  self._trap_array) - self.trapped_charge
+        self._trapped_charge += captured_charge
+
+        return captured_charge
+
+    def capture(self):
+        """Trap capture function."""
+
         raise NotImplementedError
 
 class LinearTrap(SerialTrap):
@@ -88,14 +98,10 @@ class LinearTrap(SerialTrap):
         super().__init__(size, emission_time, pixel)
         self.scaling = scaling
 
-    def trap_charge(self, free_charge):
-        """Perform charge capture using a linear function."""
-        
-        captured_charge = np.clip(free_charge*self.scaling,
-                                  self.trapped_charge, self._trap_array) - self.trapped_charge
-        self._trapped_charge += captured_charge
+    def f(self, pixel_signals):
+        """Calculate charge trapping function."""
 
-        return captured_charge
+        return pixel_signals*self.scaling
 
 class LogisticTrap(SerialTrap):
 
@@ -108,14 +114,9 @@ class LogisticTrap(SerialTrap):
         self.f0 = f0
         self.k = k
 
-    def trap_charge(self, free_charge):
-        """Perform charge capture using a logistic function."""
-
-        captured_charge = np.clip(self._trap_array/(1.+np.exp(-self.k*(free_charge-self.f0))),
-                                  self.trapped_charge, self._trap_array) - self.trapped_charge
-        self._trapped_charge += captured_charge
-
-        return captured_charge
+    def f(self, pixel_signals):
+        
+        return self.size/(1.+np.exp(-self.k*(pixel_signals-self.f0)))
 
 class SplineTrap(SerialTrap):
 
@@ -124,16 +125,8 @@ class SplineTrap(SerialTrap):
 
     def __init__(self, interpolant, emission_time, pixel):
 
-        super().__init__(self, 200000., emission_time, pixel):
+        super().__init__(self, 200000., emission_time, pixel)
         self.f = interpolant
-
-    def trap_charge(self, free_charge):
-        """Perform charge capture using a spline interoplated function."""
-
-        captured_charge = np.clip(self.f(free_charge), 
-                                  self.trapped_charge, self.free_charge) - self.trapped_charge
-
-        return captured_charge
 
 class BaseOutputAmplifier:
 
