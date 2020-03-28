@@ -101,7 +101,7 @@ class LinearTrap(SerialTrap):
     def f(self, pixel_signals):
         """Calculate charge trapping function."""
 
-        return pixel_signals*self.scaling
+        return np.minimum(self.size, pixel_signals*self.scaling)
 
 class LogisticTrap(SerialTrap):
 

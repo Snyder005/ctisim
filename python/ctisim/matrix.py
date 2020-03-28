@@ -9,7 +9,7 @@ from scipy.sparse import dia_matrix
 from scipy.sparse.linalg import inv
 from scipy.special import comb
 
-def cti_operator(cti, ncols):
+def cti_inverse_operator(cti, ncols):
     """Calculate a sparse matrix representing CTI operator."""
 
     b = cti
@@ -20,8 +20,9 @@ def cti_operator(cti, ncols):
                         [comb(i+1, i-1)*(a**i)*(b**2.) for i in range(1, ncols+1)]])
 
     D = dia_matrix((diags, [0, -1, -2]), shape=(ncols, ncols))
+    invD = inv(D)
 
-    return D
+    return invD
 
 def two_trap_operator(pixel_signals, trapsize1, scaling, trapsize2, f0, k, tau):
     """Calculate trap operator for linear plus logistic trapping parameters."""
@@ -41,7 +42,7 @@ def two_trap_operator(pixel_signals, trapsize1, scaling, trapsize2, f0, k, tau):
     
     return T
 
-def trap_operator(pixel_signals, *traps):
+def trap_operator(pixel_signals, *traps, tau=None):
     """Calculate trap operator for given serial traps."""
 
     def f(pixel_signals):
@@ -52,7 +53,10 @@ def trap_operator(pixel_signals, *traps):
 
         return y
 
-    r = np.exp(-1/tau)
+    if tau is not None:
+        r = np.exp(-1/tau)
+    else:
+        r = np.exp(-1/traps[0].emission_time)
     S_estimate = pixel_signals + f(pixel_signals)
     
     C = f(S_estimate)
