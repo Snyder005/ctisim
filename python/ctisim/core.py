@@ -125,7 +125,7 @@ class SplineTrap(SerialTrap):
 
     def __init__(self, interpolant, emission_time, pixel):
 
-        super().__init__(self, 200000., emission_time, pixel)
+        super().__init__(200000., emission_time, pixel)
         self.f = interpolant
 
 class BaseOutputAmplifier:

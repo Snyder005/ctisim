@@ -28,23 +28,24 @@ def main(sensor_id, infile, output_dir='./', cti=None, do_trapping=False,
     else:
         do_cti = True
     cti_dict = {amp : cti for amp in range(1, 17)}
-    print(cti_dict)
 
     ## Trapping parameters
     if do_trapping:
+#        traps = [LinearTrap(4.0, 0.4, 1, 0.08),
+#                 LogisticTrap(1000.0, 0.4, 1, 60000., 0.0002)]
         traps = [LinearTrap(4.0, 0.4, 1, 0.08),
-                 LogisticTrap(1000.0, 0.4, 1, 60000., 0.0002)]
+                 LogisticTrap(40.0, 0.4, 1, 17500., 0.001)]
     else:
         traps = None
     traps_dict = {amp : traps for amp in range(1, 17)}
-    print(traps_dict)
 
     ## Electronics parameters
     if do_electronics:
-        output_amps = {amp : FloatingOutputAmplifier(1.0, 0.0002, 2.4) for amp in range(1, 17)}
+        scale = 0.0002
+        decay_time = 2.5
+        output_amps = {amp : FloatingOutputAmplifier(1.0, scale, decay_time) for amp in range(1, 17)}
     else:
         output_amps = {amp : BaseOutputAmplifier(1.0) for amp in range(1, 17)}
-    print(output_amps)
 
     ## Process infile
     imsim = ImageSimulator.from_image_fits(infile, output_amps, 
@@ -53,18 +54,19 @@ def main(sensor_id, infile, output_dir='./', cti=None, do_trapping=False,
 
     ccd = MaskedCCD(processed_file)
     hdulist = fits.HDUList()
-    with fits.open(processed_file) as template:
+    with fits.open(infile) as template:
         hdulist.append(template[0])
         hdulist[0].header['ORIGFILE'] = hdulist[0].header['FILENAME']
         hdulist[0].header['FILENAME'] = corrected_file
 
-        for amp in imutils.allAmps(processed_file):
+        for amp in range(1, 17):
 
             imarr = ccd.bias_subtracted_image(amp).getImage().getArray()
 
             ## Electronics Correction
             if do_electronics:
                 E = electronics_operator(imarr, scale, decay_time, num_previous_pixels=15)
+                corrected_imarr = imarr - E
             else:
                 corrected_imarr = imarr
 
@@ -77,7 +79,7 @@ def main(sensor_id, infile, output_dir='./', cti=None, do_trapping=False,
 
             ## CTI Correction
             if do_cti:
-                Dinv_cti = cti_inverse_operator(cti_results[amp], imarr.shape[1])
+                Dinv_cti = cti_inverse_operator(cti, imarr.shape[1])
                 for i in range(imarr.shape[0]):
 
                     corrected_imarr[i, :] = Dinv_cti*corrected_imarr[i, :]

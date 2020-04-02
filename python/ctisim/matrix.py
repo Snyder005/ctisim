@@ -24,24 +24,6 @@ def cti_inverse_operator(cti, ncols):
 
     return invD
 
-def two_trap_operator(pixel_signals, trapsize1, scaling, trapsize2, f0, k, tau):
-    """Calculate trap operator for linear plus logistic trapping parameters."""
-    
-    def f(pixel_signals):
-
-        return np.minimum(trapsize1, pixel_signals*scaling) + trapsize2/(1.+np.exp(-k*(pixel_signals-f0)))
-    
-    r = np.exp(-1/tau)
-    S_estimate = pixel_signals + f(pixel_signals)
-    
-    C = f(S_estimate)
-    R = np.zeros(C.shape)
-    R[:, 1:] = f(S_estimate)[:,:-1]*(1-r)
-    R[:, 2:] += np.maximum(0, (f(S_estimate[:, :-2])-f(S_estimate[:, 1:-1]))*r*(1-r))
-    T = R - C
-    
-    return T
-
 def trap_operator(pixel_signals, *traps, tau=None):
     """Calculate trap operator for given serial traps."""
 
@@ -57,7 +39,7 @@ def trap_operator(pixel_signals, *traps, tau=None):
         r = np.exp(-1/tau)
     else:
         r = np.exp(-1/traps[0].emission_time)
-    S_estimate = pixel_signals + f(pixel_signals)
+    S_estimate = np.maximum(0, pixel_signals + f(pixel_signals))
     
     C = f(S_estimate)
     R = np.zeros(C.shape)
