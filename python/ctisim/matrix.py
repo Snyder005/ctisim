@@ -1,9 +1,15 @@
+"""Deferred charge correction module.
+
+To Do:
+    * Rename module to something better.
+    * Test out new trap operator that takes SerialTraps as args (rather than trap params).
+"""
 import numpy as np
 from scipy.sparse import dia_matrix
 from scipy.sparse.linalg import inv
 from scipy.special import comb
 
-def cti_operator(cti, ncols):
+def cti_inverse_operator(cti, ncols):
     """Calculate a sparse matrix representing CTI operator."""
 
     b = cti
@@ -14,67 +20,49 @@ def cti_operator(cti, ncols):
                         [comb(i+1, i-1)*(a**i)*(b**2.) for i in range(1, ncols+1)]])
 
     D = dia_matrix((diags, [0, -1, -2]), shape=(ncols, ncols))
+    invD = inv(D)
 
-    return D
+    return invD
 
-def one_trap_operator_new(pixel_signals, trapsize, scaling, tau):
-    """Calculate a linear operator for charge trapping."""
-    
-    r = np.exp(-1/tau)
+def trap_operator(pixel_signals, *traps, tau=None):
+    """Calculate trap operator for given serial traps."""
 
     def f(pixel_signals):
+        
+        y = 0
+        for trap in traps:
+            y += trap.f(pixel_signals)
 
-        return np.minimum(trapsize, pixel_signals*scaling)
+        return y
+
+    if tau is not None:
+        r = np.exp(-1/tau)
+    else:
+        r = np.exp(-1/traps[0].emission_time)
+    S_estimate = np.maximum(0, pixel_signals + f(pixel_signals))
     
-    S_estimate = pixel_signals + f(pixel_signals)
-
-    T = -f(S_estimate)
-    T[:, 1:] += (1-r)*f(S_estimate)[:, :-1]
-    T[:, 2:] += r*(1-r)*f(S_estimate[:, :-2])
+    C = f(S_estimate)
+    R = np.zeros(C.shape)
+    R[:, 1:] = f(S_estimate)[:,:-1]*(1-r)
+    R[:, 2:] += np.maximum(0, (f(S_estimate[:, :-2])-f(S_estimate[:, 1:-1]))*r*(1-r))
+    T = R - C
     
     return T
 
-def one_trap_operator(pixel_signals, trapsize, scaling):
-    """Calculate a linear operator for charge trapping."""
-    
-    def f(pixel_signals):
-
-        return np.minimum(trapsize, pixel_signals*scaling)
-    
-    S_estimate = pixel_signals + f(pixel_signals)
-
-    T = -f(S_estimate)
-    T[:, 1:] += f(S_estimate)[:, :-1]
-#    T[:, 2:] += r*(1-r)*f(S_estimate[:, :-2])
-    
-    return T
-
-def two_trap_operator_new(pixel_signals, trapsize1, scaling, trapsize2, f0, k, tau):
+def electronics_operator(pixel_signals, scale, tau, num_previous_pixels=4):
 
     r = np.exp(-1/tau)
 
-    def f(pixel_signals):
+    ny, nx = pixel_signals.shape
 
-        return np.minimum(trapsize1, pixel_signals*scaling) + trapsize2/(1.+np.exp(-k*(pixel_signals-f0)))
-    
-    S_estimate = pixel_signals + f(pixel_signals)
+    offset = np.zeros((num_previous_pixels, ny, nx))
+    offset[0, :, :] = scale*pixel_signals[:, :]
 
-    T = -f(S_estimate)*r
-    T[:, 1:] += (1-r)*f(S_estimate)[:, :-1]
-    T[:, 2:] += r*(1-r)*f(S_estimate[:, :-2])
-    
-    return T
+    for n in range(1, num_previous_pixels):
+        offset[n, :, n:] = scale*pixel_signals[:, :-n]*(r**(n))
 
-def two_trap_operator(pixel_signals, trapsize1, scaling, trapsize2, f0, k):
+    E = np.amax(offset, axis=0)
 
-    def f(pixel_signals):
-
-        return np.minimum(trapsize1, pixel_signals*scaling) + trapsize2/(1.+np.exp(-k*(pixel_signals-f0)))
-    
-    S_estimate = pixel_signals + f(pixel_signals)
-
-    T = -f(S_estimate)
-    T[:, 1:] += f(S_estimate)[:, :-1]
-    
-    return T
+    return E
+        
 

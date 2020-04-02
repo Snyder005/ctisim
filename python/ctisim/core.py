@@ -4,7 +4,10 @@
 This submodule contains the core classes for use in the deferred charge simulations.
 
 To Do:
-    * Make OutputAmplifier with bias drift a subclass of a base Amplifier class.
+    * Change the initialize. Traps should not carry a pixel array dependent on
+      unknown amplifier geometry.
+    * Modify so that each trap has a trapping function that can be used for the
+      trapping operator in the correction scheme.
 """
 
 import numpy as np
@@ -71,8 +74,18 @@ class SerialTrap:
 
         return released_charge
 
-    def trap_charge(self):
-        """Capture charge according to trapping function and parameters."""
+    def trap_charge(self, free_charge):
+        """Perform charge capture using a logistic function."""
+
+        captured_charge = np.clip(self.f(free_charge), self.trapped_charge, 
+                                  self._trap_array) - self.trapped_charge
+        self._trapped_charge += captured_charge
+
+        return captured_charge
+
+    def capture(self):
+        """Trap capture function."""
+
         raise NotImplementedError
 
 class LinearTrap(SerialTrap):
@@ -85,14 +98,10 @@ class LinearTrap(SerialTrap):
         super().__init__(size, emission_time, pixel)
         self.scaling = scaling
 
-    def trap_charge(self, free_charge):
-        """Perform charge capture using a linear function."""
-        
-        captured_charge = np.clip(free_charge*self.scaling,
-                                  self.trapped_charge, self._trap_array) - self.trapped_charge
-        self._trapped_charge += captured_charge
+    def f(self, pixel_signals):
+        """Calculate charge trapping function."""
 
-        return captured_charge
+        return np.minimum(self.size, pixel_signals*self.scaling)
 
 class LogisticTrap(SerialTrap):
 
@@ -105,14 +114,19 @@ class LogisticTrap(SerialTrap):
         self.f0 = f0
         self.k = k
 
-    def trap_charge(self, free_charge):
-        """Perform charge capture using a logistic function."""
+    def f(self, pixel_signals):
+        
+        return self.size/(1.+np.exp(-self.k*(pixel_signals-self.f0)))
 
-        captured_charge = np.clip(self._trap_array/(1.+np.exp(-self.k*(free_charge-self.f0))),
-                                  self.trapped_charge, self._trap_array) - self.trapped_charge
-        self._trapped_charge += captured_charge
+class SplineTrap(SerialTrap):
 
-        return captured_charge
+    parameter_keywords = None
+    model_type = 'spline'
+
+    def __init__(self, interpolant, emission_time, pixel):
+
+        super().__init__(200000., emission_time, pixel)
+        self.f = interpolant
 
 class BaseOutputAmplifier:
 
