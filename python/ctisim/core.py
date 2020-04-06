@@ -30,14 +30,14 @@ class SerialTrap:
     
     def __init__(self, size, emission_time, pixel):
         
-        if size <= 0.0:
-            raise ValueError('Trap size must be greater than 0.')
+        if size < 0.0:
+            raise ValueError('Trap size must be greater than or equal to 0.')
         self.size = size
 
         if emission_time <= 0.0:
             raise ValueError('Emission time must be greater than 0.')
         if np.isnan(emission_time):
-            raise ValueError('Emission time must be real-valued number, not NaN')
+            raise ValueError('Emission time must be real-valued, not NaN')
         self.emission_time = emission_time
 
         if not isinstance(pixel, int):
