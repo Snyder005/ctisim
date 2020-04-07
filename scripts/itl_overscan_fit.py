@@ -5,9 +5,10 @@ import numpy as np
 from os.path import join
 import scipy
 from astropy.io import fits
+from lmfit import Minimizer, Parameters
 
 from ctisim import ITL_AMP_GEOM, E2V_AMP_GEOM
-from ctisim.fitting import OverscanFitting, BiasDriftSimpleModel
+from ctisim.fitting import SimpleModel
 from ctisim.utils import OverscanParameterResults
 
 RAFT_NAMES = ['R01', 'R02', 'R03', 
@@ -22,13 +23,11 @@ CCD_NAMES = ['S00', 'S01', 'S02',
 def main(directory):
 
     ## Config variables
-    start = 3
-    stop = 15
+    start = 2
+    stop = 20
     ccd_type = 'itl'
-    max_signal = 140000.
-    min_signal = 20000.
-    read_noise = 7.0
-
+    max_signal = 160000.
+    error = 7.0/np.sqrt(2000.)
 
     num_failures = 0
     for raft_name in RAFT_NAMES:
@@ -59,38 +58,53 @@ def main(directory):
 
             for amp in range(1, 17):
 
-                signals_all = hdulist[amp].data['FLATFIELD_SIGNAL']
-                data_all = hdulist[amp].data['COLUMN_MEAN'][:, start:stop+1]
-                indices = (signals_all < max_signal)*(signals_all>min_signal)
-                signals = signals_all[indices]
-                data = data_all[indices]
+                ## Signals
+                all_signals = hdulist[amp].data['FLATFIELD_SIGNAL']
+                signals = all_signals[all_signals<max_signal]
 
-                params0 = [-7., 2.0, 2.5]
-                constraints = [(-7., -7.), (0., 10.), (0.01, 4.0)]
+                ## Data
+                data = hdulist[amp].data['COLUMN_MEAN'][all_signals<max_signal, 
+                                                        start:stop+1]
 
-                fitting_task = OverscanFitting(params0, constraints, BiasDriftSimpleModel,
-                                               start=start, stop=stop)
-                fit_results = scipy.optimize.minimize(fitting_task.negative_loglikelihood,
-                                                      params0,
-                                                      args=(signals, data, read_noise/np.sqrt(2000.), ncols),
-                                                      bounds=constraints, method='SLSQP')
+                params = Parameters()
+                params.add('ctiexp', value=-6, min=-7, max=-5, vary=False)
+                params.add('trapsize', value=0.0, min=0., max=10., vary=False)
+                params.add('scaling', value=0.08, min=0, max=1.0, vary=False)
+                params.add('emissiontime', value=0.4, min=0.1, max=1.0, vary=False)
+                params.add('driftscale', value=0.0006, min=0., max=0.001)
+                params.add('decaytime', value=1.5, min=0.1, max=4.0)
+                params.add('threshold', value=5000.0, min=0.0, max=150000.)
 
-                if fit_results.success:
-                    ctiexp, drift_scale, decay_time = fit_results.x
-                    cti_results[amp] = 10**ctiexp
-                    drift_scales[amp] = drift_scale/10000.
+                model = SimpleModel()
+
+                minner = Minimizer(model.difference, params, 
+                                   fcn_args=(signals, data, error, ncols),
+                                   fcn_kws={'start' : start, 'stop' : stop})
+                result = minner.minimize()
+
+                if result.success:
+
+                    try:
+                        cti = 10**result.params['ctiexp']
+                    except KeyError:
+                        cti = result.params['cti']
+                    drift_scale = result.params['driftscale']
+                    decay_time = result.params['decaytime']
+                    cti_results[amp] = cti
+                    drift_scales[amp] = drift_scale
                     decay_times[amp] = decay_time
                 else:
                     num_failures += 1
                     print(sensor_id, amp)
                     print(fit_results)
 
-            outfile = os.path.join(ccd_output_dir, '{0}_parameter_results.fits'.format(sensor_id))
-            parameter_results = OverscanParameterResults(sensor_id, cti_results, drift_scales, decay_times)
+            outfile = os.path.join(ccd_output_dir, 
+                                   '{0}_parameter_results.fits'.format(sensor_id))
+            parameter_results = OverscanParameterResults(sensor_id, cti_results, 
+                                                         drift_scales, decay_times)
             parameter_results.write_fits(outfile, overwrite=True)
 
     print('There were {0} failures in the overscan fit'.format(num_failures))
-
 
 if __name__ == '__main__':
 
