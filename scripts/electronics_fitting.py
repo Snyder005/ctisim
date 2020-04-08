@@ -19,99 +19,90 @@ RAFT_NAMES = ['R01', 'R02', 'R03',
 
 CCD_NAMES = ['S00', 'S01', 'S02',
              'S10', 'S11', 'S12',
-             'S20', 'S21', 'S22',]
-def main(directory):
+             'S20', 'S21', 'S22']
+
+def main(sensor_id, directory):
 
     ## Config variables
-    start = 2
-    stop = 20
+    start = 3
+    stop = 13
     ccd_type = 'itl'
-    max_signal = 160000.
+    max_signal = 150000.
     error = 7.0/np.sqrt(2000.)
 
     num_failures = 0
-    for raft_name in RAFT_NAMES:
 
-        raft_output_dir = join(directory, raft_name)
-        
-        for ccd_name in CCD_NAMES:
+    ## Get existing overscan analysis results
+    hdulist = fits.open(join(directory, 
+                             '{0}_overscan_results.fits'.format(sensor_id)))
 
-            ## Get existing overscan analysis results
-            ccd_output_dir = join(directory, raft_name, ccd_name)
-            sensor_id = '{0}_{1}'.format(raft_name, ccd_name)
-            try:
-                hdulist = fits.open(join(ccd_output_dir, 
-                                         '{0}_overscan_results.fits'.format(sensor_id)))
+    cti_results = {i : 0.0 for i in range(1, 17)}
+    drift_scales = {i : 0.0 for i in range(1, 17)}
+    decay_times = {i : 0.0 for i in range(1, 17)}
+    thresholds = {i : 0.0 for i in range(1, 17)}
 
-            except FileNotFoundError:
-                continue
+    ## CCD geometry info
+    ncols = ITL_AMP_GEOM.nx + ITL_AMP_GEOM.prescan_width
 
-            cti_results = {i : 0.0 for i in range(1, 17)}
-            drift_scales = {i : 0.0 for i in range(1, 17)}
-            decay_times = {i : 0.0 for i in range(1, 17)}
+    for amp in range(1, 17):
 
-            ## CCD geometry info
-            if ccd_type == 'itl':
-                ncols = ITL_AMP_GEOM.nx + ITL_AMP_GEOM.prescan_width
-            if ccd_type == 'e2v':
-                ncols = E2V_AMP_GEOM.nx + E2V_AMP_GEOM.prescan_width
+        ## Signals
+        all_signals = hdulist[amp].data['FLATFIELD_SIGNAL']
+        signals = all_signals[all_signals<max_signal]
 
-            for amp in range(1, 17):
+        ## Data
+        data = hdulist[amp].data['COLUMN_MEAN'][all_signals<max_signal, 
+                                                start:stop+1]
 
-                ## Signals
-                all_signals = hdulist[amp].data['FLATFIELD_SIGNAL']
-                signals = all_signals[all_signals<max_signal]
+        params = Parameters()
+        params.add('ctiexp', value=-6, min=-7, max=-5, vary=False)
+        params.add('trapsize', value=0.0, min=0., max=10., vary=False)
+        params.add('scaling', value=0.08, min=0, max=1.0, vary=False)
+        params.add('emissiontime', value=0.4, min=0.1, max=1.0, vary=False)
+        params.add('driftscale', value=0.00022, min=0., max=0.001)
+        params.add('decaytime', value=2.4, min=0.1, max=4.0)
+        params.add('threshold', value=100.0, min=0.0, max=100000.)
 
-                ## Data
-                data = hdulist[amp].data['COLUMN_MEAN'][all_signals<max_signal, 
-                                                        start:stop+1]
+        model = SimpleModel()
 
-                params = Parameters()
-                params.add('ctiexp', value=-6, min=-7, max=-5, vary=False)
-                params.add('trapsize', value=0.0, min=0., max=10., vary=False)
-                params.add('scaling', value=0.08, min=0, max=1.0, vary=False)
-                params.add('emissiontime', value=0.4, min=0.1, max=1.0, vary=False)
-                params.add('driftscale', value=0.0006, min=0., max=0.001)
-                params.add('decaytime', value=1.5, min=0.1, max=4.0)
-                params.add('threshold', value=5000.0, min=0.0, max=150000.)
+        minner = Minimizer(model.difference, params, 
+                           fcn_args=(signals, data, error, ncols),
+                           fcn_kws={'start' : start, 'stop' : stop})
+        result = minner.minimize()
 
-                model = SimpleModel()
+        if result.success:
 
-                minner = Minimizer(model.difference, params, 
-                                   fcn_args=(signals, data, error, ncols),
-                                   fcn_kws={'start' : start, 'stop' : stop})
-                result = minner.minimize()
+            cti = 10**result.params['ctiexp']
+            drift_scale = result.params['driftscale']
+            decay_time = result.params['decaytime']
+            threshold = result.params['threshold']
+            cti_results[amp] = cti
+            drift_scales[amp] = drift_scale
+            decay_times[amp] = decay_time
+            thresholds[amp] = threshold
 
-                if result.success:
+    outfile = os.path.join(directory, 
+                           '{0}_parameter_results.fits'.format(sensor_id))
+    parameter_results = OverscanParameterResults(sensor_id, 
+                                                 cti_results, 
+                                                 drift_scales, 
+                                                 decay_times, 
+                                                 thresholds)
+    parameter_results.write_fits(outfile, overwrite=True)
 
-                    try:
-                        cti = 10**result.params['ctiexp']
-                    except KeyError:
-                        cti = result.params['cti']
-                    drift_scale = result.params['driftscale']
-                    decay_time = result.params['decaytime']
-                    cti_results[amp] = cti
-                    drift_scales[amp] = drift_scale
-                    decay_times[amp] = decay_time
-                else:
-                    num_failures += 1
-                    print(sensor_id, amp)
-                    print(fit_results)
-
-            outfile = os.path.join(ccd_output_dir, 
-                                   '{0}_parameter_results.fits'.format(sensor_id))
-            parameter_results = OverscanParameterResults(sensor_id, cti_results, 
-                                                         drift_scales, decay_times)
-            parameter_results.write_fits(outfile, overwrite=True)
+    print(parameter_results.drift_scales)
+    print(parameter_results.decay_times)
+    print(parameter_results.thresholds)
 
     print('There were {0} failures in the overscan fit'.format(num_failures))
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
+    parser.add_argument('sensor_id', type=str)
     parser.add_argument('directory', type=str,
                         help='File path to base directory of overscan results.')
     args = parser.parse_args()
 
-    main(args.directory)
+    main(args.sensor_id, args.directory)
 

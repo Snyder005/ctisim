@@ -96,7 +96,8 @@ class SimulatedModel(OverscanModel):
         try:
             output_amplifier = FloatingOutputAmplifier(1.0, 
                                                        v['driftscale'], 
-                                                       v['decaytime'])
+                                                       v['decaytime'],
+                                                       v['threshold'])
         except KeyError:
             output_amplifier = BaseOutputAmplifier(1.0)
             
