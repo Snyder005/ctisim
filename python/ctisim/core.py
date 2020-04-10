@@ -166,8 +166,8 @@ class FloatingOutputAmplifier(BaseOutputAmplifier):
     def update_parameters(self, scale, decay_time, threshold):
         """Update parameter values, if within acceptable values."""
 
-        if scale <= 0.0:
-            raise ValueError("Hysteresis scale must be greater than or equal to 0.")
+        if scale < 0.0:
+            raise ValueError("Scale must be greater than or equal to 0.")
         self.scale = scale
         if decay_time <= 0.0:
             raise ValueError("Decay time must be greater than 0.")

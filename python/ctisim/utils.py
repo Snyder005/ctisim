@@ -65,6 +65,7 @@ class OverscanParameterResults:
         
         drift_scale = self.drift_scales[ampnum]
         decay_time = self.decay_times[ampnum]
+        threshold = self.thresholds[ampnum]
         output_amplifier = FloatingOutputAmplifier(gain, drift_scale, 
                                                    decay_time,
                                                    threshold,
@@ -79,7 +80,7 @@ class OverscanParameterResults:
 
         output_amplifiers = {}
         for ampnum in range(1, 17):
-            output_amplifiers[ampno] = self.single_output_amplifier(ampnum, 
+            output_amplifiers[ampnum] = self.single_output_amplifier(ampnum, 
                                                                     gain_dict[ampnum], 
                                                                     noise_dict[ampnum], 
                                                                     offset_dict[ampnum])

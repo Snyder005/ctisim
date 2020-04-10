@@ -31,7 +31,7 @@ def trap_operator(pixel_signals, *traps, tau=None):
         
         y = 0
         for trap in traps:
-            y += trap.f(pixel_signals)
+            y += trap.f(np.maximum(0, pixel_signals))
 
         return y
 
@@ -39,7 +39,7 @@ def trap_operator(pixel_signals, *traps, tau=None):
         r = np.exp(-1/tau)
     else:
         r = np.exp(-1/traps[0].emission_time)
-    S_estimate = np.maximum(0, pixel_signals + f(pixel_signals))
+    S_estimate = pixel_signals + f(pixel_signals)
     
     C = f(S_estimate)
     R = np.zeros(C.shape)
@@ -49,17 +49,18 @@ def trap_operator(pixel_signals, *traps, tau=None):
     
     return T
 
-def electronics_operator(pixel_signals, scale, tau, num_previous_pixels=4):
+def electronics_operator(pixel_signals, scale, tau, threshold,
+                         num_previous_pixels=4):
 
     r = np.exp(-1/tau)
 
     ny, nx = pixel_signals.shape
 
     offset = np.zeros((num_previous_pixels, ny, nx))
-    offset[0, :, :] = scale*pixel_signals[:, :]
+    offset[0, :, :] = scale*np.maximum(0, pixel_signals[:, :]-threshold)
 
     for n in range(1, num_previous_pixels):
-        offset[n, :, n:] = scale*pixel_signals[:, :-n]*(r**(n))
+        offset[n, :, n:] = scale*np.maximum(0, pixel_signals[:, :-n]-threshold)*(r**(n))
 
     E = np.amax(offset, axis=0)
 
