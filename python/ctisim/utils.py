@@ -33,12 +33,14 @@ E2V_AMP_GEOM = AmplifierGeometry(prescan=10, nx=512, ny=2002,
 
 class OverscanParameterResults:
 
-    def __init__(self, sensor_id, cti_results, drift_scales, decay_times):
+    def __init__(self, sensor_id, cti_results, drift_scales, decay_times,
+                 thresholds):
 
         self.sensor_id = sensor_id
         self.cti_results = cti_results
         self.drift_scales = drift_scales
         self.decay_times = decay_times
+        self.thresholds = thresholds
 
     @classmethod
     def from_fits(cls, infile):
@@ -51,7 +53,9 @@ class OverscanParameterResults:
             cti_results = cls.asdict(data['CTI'])
             drift_scales = cls.asdict(data['DRIFT_SCALE'])
             decay_times = cls.asdict(data['DECAY_TIME'])
-        results = cls(sensor_id, cti_results, drift_scales, decay_times)
+            thresholds = cls.asdict(data['THRESHOLD'])
+        results = cls(sensor_id, cti_results, drift_scales, decay_times, 
+                      thresholds)
 
 
         return results
@@ -61,8 +65,12 @@ class OverscanParameterResults:
         
         drift_scale = self.drift_scales[ampnum]
         decay_time = self.decay_times[ampnum]
-        output_amplifier = FloatingOutputAmplifier(gain, drift_scale, decay_time,
-                                                   noise=noise, offset=offset)
+        threshold = self.thresholds[ampnum]
+        output_amplifier = FloatingOutputAmplifier(gain, drift_scale, 
+                                                   decay_time,
+                                                   threshold,
+                                                   noise=noise, 
+                                                   offset=offset)
 
         return output_amplifier
 
@@ -72,7 +80,7 @@ class OverscanParameterResults:
 
         output_amplifiers = {}
         for ampnum in range(1, 17):
-            output_amplifiers[ampno] = self.single_output_amplifier(ampnum, 
+            output_amplifiers[ampnum] = self.single_output_amplifier(ampnum, 
                                                                     gain_dict[ampnum], 
                                                                     noise_dict[ampnum], 
                                                                     offset_dict[ampnum])
@@ -88,11 +96,13 @@ class OverscanParameterResults:
         cti_results = self.cti_results
         drift_scales = self.drift_scales
         decay_times = self.decay_times
+        thresholds = self.thresholds
 
         cols = [fits.Column(name='AMPLIFIER', array=np.arange(1, 17), format='I'),
                 fits.Column(name='CTI', array=self.asarray(cti_results), format='E'),
                 fits.Column(name='DRIFT_SCALE', array=self.asarray(drift_scales), format='E'),
-                fits.Column(name='DECAY_TIME', array=self.asarray(decay_times), format='E')]
+                fits.Column(name='DECAY_TIME', array=self.asarray(decay_times), format='E'),
+                fits.Column(name='THRESHOLD', array=self.asarray(thresholds), format='E')]
 
         hdu = fits.BinTableHDU.from_columns(cols)
         hdulist = fits.HDUList([prihdu, hdu])

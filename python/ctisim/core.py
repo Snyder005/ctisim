@@ -151,26 +151,29 @@ class FloatingOutputAmplifier(BaseOutputAmplifier):
     """
     do_local_offset = True
     
-    def __init__(self, gain, scale, decay_time, noise=0.0, offset=0.0):
+    def __init__(self, gain, scale, decay_time, threshold, noise=0.0, offset=0.0):
 
         super().__init__(gain, noise, offset)
-        self.update_parameters(scale, decay_time)
+        self.update_parameters(scale, decay_time, threshold)
 
     def local_offset(self, old, signal):
         """Calculate local offset hysteresis."""
 
-        new = np.maximum(self.scale*signal, np.zeros(signal.shape))
+        new = np.maximum(self.scale*signal-self.threshold, np.zeros(signal.shape))
         
         return np.maximum(new, old*np.exp(-1/self.decay_time))
 
-    def update_parameters(self, scale, decay_time):
+    def update_parameters(self, scale, decay_time, threshold):
         """Update parameter values, if within acceptable values."""
 
-        if scale <= 0.0:
-            raise ValueError("Hysteresis scale must be greater than or equal to 0.")
+        if scale < 0.0:
+            raise ValueError("Scale must be greater than or equal to 0.")
         self.scale = scale
         if decay_time <= 0.0:
             raise ValueError("Decay time must be greater than 0.")
         if np.isnan(decay_time):
             raise ValueError("Decay time must be real-valued number, not NaN.")
         self.decay_time = decay_time
+        if threshold < 0.0:
+            raise ValueError("Threshold must be greater than or equal to 0.")
+        self.threshold = threshold
