@@ -10,7 +10,7 @@ from lsst.eotest.fitsTools import fitsWriteto
 from ctisim.utils import OverscanParameterResults
 from ctisim.matrix import electronics_operator, trap_operator
 
-def main(sensor_id, infile, main_dir, output_dir='./'):
+def main(sensor_id, infile, main_dir, gain_file=None, output_dir='./'):
 
     ## Get existing parameter results
     param_file = os.path.join(main_dir, 
@@ -20,6 +20,14 @@ def main(sensor_id, infile, main_dir, output_dir='./'):
     drift_scales = param_results.drift_scales
     decay_times = param_results.decay_times
     thresholds = param_results.thresholds
+
+    ## Get gains
+    if gain_file is not None:
+        with open(gain_file, 'rb') as f:
+            gain_results = pickle.load(f)
+            gains = gain_results.get_amp_gains(sensor_id)
+    else:
+        gains = {i : 1.0 for i in range(1, 17)}
 
     ## Output filename
     base = os.path.splitext(os.path.basename(infile))[0]
@@ -34,7 +42,7 @@ def main(sensor_id, infile, main_dir, output_dir='./'):
 
         for amp in range(1, 17):
 
-            imarr = ccd.bias_subtracted_image(amp).getImage().getArray()
+            imarr = ccd.bias_subtracted_image(amp).getImage().getArray()*gains[amp]
 
             ## Electronics Correction
             if drift_scales[amp] > 0.:
@@ -69,9 +77,11 @@ if __name__ == '__main__':
     parser.add_argument('infile', type=str)
     parser.add_argument('main_dir', type=str)
     parser.add_argument('--output_dir', '-o', type=str, default='./')
+    parser.add_argument('--gain_file', '-g', type=str, default=None)
     args = parser.parse_args()
 
-    main(args.sensor_id, args.infile, args.main_dir, output_dir=args.output_dir)
+    main(args.sensor_id, args.infile, args.main_dir, 
+         gain_file=args.gain_file, output_dir=args.output_dir)
 
 
         
