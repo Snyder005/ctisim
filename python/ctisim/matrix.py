@@ -24,7 +24,7 @@ def cti_inverse_operator(cti, ncols):
 
     return invD
 
-def trap_operator(pixel_signals, *traps, tau=None):
+def trap_operator(pixel_signals, *traps):
     """Calculate trap operator for given serial traps."""
 
     def f(pixel_signals):
@@ -35,16 +35,13 @@ def trap_operator(pixel_signals, *traps, tau=None):
 
         return y
 
-    if tau is not None:
-        r = np.exp(-1/tau)
-    else:
-        r = np.exp(-1/traps[0].emission_time)
     S_estimate = pixel_signals + f(pixel_signals)
     
     C = f(S_estimate)
     R = np.zeros(C.shape)
-    R[:, 1:] = f(S_estimate)[:,:-1]*(1-r)
-    R[:, 2:] += np.maximum(0, (f(S_estimate[:, :-2])-f(S_estimate[:, 1:-1]))*r*(1-r))
+    R[:, 1:] = f(S_estimate)[:, :-1]
+#    R[:, 1:] = f(S_estimate)[:,:-1]*(1-r)
+#    R[:, 2:] += np.maximum(0, (f(S_estimate[:, :-2])-f(S_estimate[:, 1:-1]))*r*(1-r))
     T = R - C
     
     return T

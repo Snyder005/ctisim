@@ -76,7 +76,7 @@ class SimpleModel(OverscanModel):
         for i, s in enumerate(signals):
             res[i, :] = (np.minimum(v['trapsize'], s*v['scaling'])*(np.exp(1/v['emissiontime'])-1.)*np.exp(-x/v['emissiontime'])
                          + s*num_transfers*v['cti']**x
-                         + v['driftscale']*np.maximum(0, s-v['threshold'])*np.exp(-x/v['decaytime']))
+                         + v['driftscale']*np.maximum(0, s-v['threshold'])*np.exp(-x/float(v['decaytime'])))
                                             
         return res
     
