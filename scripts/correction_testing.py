@@ -5,7 +5,7 @@ from astropy.utils.exceptions import AstropyWarning, AstropyUserWarning
 import warnings
 import os
 
-from ctisim.matrix import cti_inverse_operator, electronics_operator, trap_operator
+from ctisim.correction import cti_inverse_operator, electronics_operator, trap_operator
 from ctisim import LinearTrap, LogisticTrap, SplineTrap
 from ctisim import ImageSimulator
 from ctisim import BaseOutputAmplifier, FloatingOutputAmplifier

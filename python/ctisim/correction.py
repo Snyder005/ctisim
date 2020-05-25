@@ -40,8 +40,32 @@ def trap_operator(pixel_signals, *traps):
     C = f(S_estimate)
     R = np.zeros(C.shape)
     R[:, 1:] = f(S_estimate)[:, :-1]
-#    R[:, 1:] = f(S_estimate)[:,:-1]*(1-r)
-#    R[:, 2:] += np.maximum(0, (f(S_estimate[:, :-2])-f(S_estimate[:, 1:-1]))*r*(1-r))
+    T = R - C
+    
+    return T
+
+def trap_operator2(pixel_signals, *traps, tau=None):
+    """Calculate trap operator for given serial traps."""
+
+    def f(pixel_signals):
+        
+        y = 0
+        for trap in traps:
+            y += trap.f(np.maximum(0, pixel_signals))
+
+        return y
+
+    if tau is None:
+        tau = trap.emission_time
+
+    r = np.exp(-1/tau)
+
+    S_estimate = pixel_signals + f(pixel_signals)
+    
+    C = f(S_estimate)
+    R = np.zeros(C.shape)
+    R[:, 1:] = f(S_estimate)[:, :-1]
+    R[:, 2:] = f(S_estimate)[:, :-2]*r*(1-r)
     T = R - C
     
     return T

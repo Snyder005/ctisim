@@ -76,7 +76,7 @@ class SimpleModel(OverscanModel):
         for i, s in enumerate(signals):
             res[i, :] = (np.minimum(v['trapsize'], s*v['scaling'])*(np.exp(1/v['emissiontime'])-1.)*np.exp(-x/v['emissiontime'])
                          + s*num_transfers*v['cti']**x
-                         + v['driftscale']*np.maximum(0, s-v['threshold'])*np.exp(-x/float(v['decaytime'])))
+                         + v['driftscale']*s*np.exp(-x/float(v['decaytime'])))
                                             
         return res
     
@@ -96,8 +96,7 @@ class SimulatedModel(OverscanModel):
         try:
             output_amplifier = FloatingOutputAmplifier(1.0, 
                                                        v['driftscale'], 
-                                                       v['decaytime'],
-                                                       v['threshold'])
+                                                       v['decaytime'])
         except KeyError:
             output_amplifier = BaseOutputAmplifier(1.0)
             
@@ -116,6 +115,8 @@ class SimulatedModel(OverscanModel):
         elif trap_type == 'logistic':
             trap = LogisticTrap(v['trapsize'], v['emissiontime'], 1, 
                                 v['f0'], v['k'])
+        else: 
+            raise ValueError('Trap type must be linear or logistic or None')
             
         ## Optional fixed traps
         try:

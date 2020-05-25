@@ -4,10 +4,10 @@
 This submodule contains the core classes for use in the deferred charge simulations.
 
 To Do:
+    * Maybe add changes to check if lmfit parameters.
     * Change the initialize. Traps should not carry a pixel array dependent on
       unknown amplifier geometry.
-    * Modify so that each trap has a trapping function that can be used for the
-      trapping operator in the correction scheme.
+
 """
 
 import numpy as np
@@ -151,19 +151,19 @@ class FloatingOutputAmplifier(BaseOutputAmplifier):
     """
     do_local_offset = True
     
-    def __init__(self, gain, scale, decay_time, threshold, noise=0.0, offset=0.0):
+    def __init__(self, gain, scale, decay_time, noise=0.0, offset=0.0):
 
         super().__init__(gain, noise, offset)
-        self.update_parameters(scale, decay_time, threshold)
+        self.update_parameters(scale, decay_time)
 
     def local_offset(self, old, signal):
         """Calculate local offset hysteresis."""
 
-        new = np.maximum(self.scale*signal-self.threshold, np.zeros(signal.shape))
+        new = self.scale*signal
         
         return np.maximum(new, old*np.exp(-1/self.decay_time))
 
-    def update_parameters(self, scale, decay_time, threshold):
+    def update_parameters(self, scale, decay_time):
         """Update parameter values, if within acceptable values."""
 
         if scale < 0.0:
@@ -174,6 +174,3 @@ class FloatingOutputAmplifier(BaseOutputAmplifier):
         if np.isnan(decay_time):
             raise ValueError("Decay time must be real-valued number, not NaN.")
         self.decay_time = decay_time
-        if threshold < 0.0:
-            raise ValueError("Threshold must be greater than or equal to 0.")
-        self.threshold = threshold

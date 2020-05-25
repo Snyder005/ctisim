@@ -8,7 +8,7 @@ import pickle
 from lsst.eotest.sensor import MaskedCCD
 from lsst.eotest.fitsTools import fitsWriteto
 from ctisim.utils import OverscanParameterResults
-from ctisim.matrix import electronics_operator, trap_operator
+from ctisim.correction import electronics_operator, trap_operator
 
 def main(sensor_id, infile, main_dir, gain_file=None, output_dir='./'):
 
