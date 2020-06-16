@@ -8,7 +8,7 @@ import pickle
 from lsst.eotest.sensor import MaskedCCD
 from lsst.eotest.fitsTools import fitsWriteto
 from ctisim.utils import OverscanParameterResults
-from ctisim.matrix import electronics_operator, trap_operator
+from ctisim.correction import electronics_operator, trap_operator
 
 def main(sensor_id, infile, main_dir, gain_file=None, output_dir='./'):
 
@@ -19,7 +19,6 @@ def main(sensor_id, infile, main_dir, gain_file=None, output_dir='./'):
     cti_results = param_results.cti_results
     drift_scales = param_results.drift_scales
     decay_times = param_results.decay_times
-    thresholds = param_results.thresholds
 
     ## Get gains
     if gain_file is not None:
@@ -47,8 +46,7 @@ def main(sensor_id, infile, main_dir, gain_file=None, output_dir='./'):
             ## Electronics Correction
             if drift_scales[amp] > 0.:
                 E = electronics_operator(imarr, drift_scales[amp], 
-                                         decay_times[amp], 
-                                         thresholds[amp],
+                                         decay_times[amp],
                                          num_previous_pixels=15)
                 corrected_imarr = imarr - E
             else:
@@ -61,7 +59,7 @@ def main(sensor_id, infile, main_dir, gain_file=None, output_dir='./'):
             T = trap_operator(corrected_imarr, spltrap)
             corrected_imarr = corrected_imarr - (1-cti_results[amp])*T
 
-            hdulist.append(fits.ImageHDU(data=corrected_imarr,
+            hdulist.append(fits.ImageHDU(data=corrected_imarr/gains[amp],
                                      header=template[amp].header))
             with warnings.catch_warnings():
                 for warning in (UserWarning, AstropyWarning,

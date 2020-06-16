@@ -39,7 +39,6 @@ def main(sensor_id, directory):
     cti_results = {i : 0.0 for i in range(1, 17)}
     drift_scales = {i : 0.0 for i in range(1, 17)}
     decay_times = {i : 0.0 for i in range(1, 17)}
-    thresholds = {i : 0.0 for i in range(1, 17)}
 
     ## CCD geometry info
     ncols = ITL_AMP_GEOM.nx + ITL_AMP_GEOM.prescan_width
@@ -61,7 +60,6 @@ def main(sensor_id, directory):
         params.add('emissiontime', value=0.4, min=0.1, max=1.0, vary=False)
         params.add('driftscale', value=0.00022, min=0., max=0.001)
         params.add('decaytime', value=2.4, min=0.1, max=4.0)
-        params.add('threshold', value=100.0, min=0.0, max=100000.)
 
         model = SimpleModel()
 
@@ -75,24 +73,17 @@ def main(sensor_id, directory):
             cti = 10**result.params['ctiexp']
             drift_scale = result.params['driftscale']
             decay_time = result.params['decaytime']
-            threshold = result.params['threshold']
             cti_results[amp] = cti
             drift_scales[amp] = drift_scale
             decay_times[amp] = decay_time
-            thresholds[amp] = threshold
 
     outfile = os.path.join(directory, 
                            '{0}_parameter_results.fits'.format(sensor_id))
     parameter_results = OverscanParameterResults(sensor_id, 
                                                  cti_results, 
                                                  drift_scales, 
-                                                 decay_times, 
-                                                 thresholds)
+                                                 decay_times)
     parameter_results.write_fits(outfile, overwrite=True)
-
-    print(parameter_results.drift_scales)
-    print(parameter_results.decay_times)
-    print(parameter_results.thresholds)
 
     print('There were {0} failures in the overscan fit'.format(num_failures))
 
