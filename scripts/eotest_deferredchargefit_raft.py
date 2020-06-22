@@ -125,10 +125,10 @@ def main(raft_id, directory):
                 overscan2 = data[:, 1]
                 test = (overscan1+overscan2)/(ncols*lastpixel)
 
-                if np.median(test) > 8.E-6:
+                if np.median(test) > 5.E-6:
 
                     params = Parameters()
-                    params.add('ctiexp', value=-6, min=-7, max=np.log10(5E-6), vary=True)
+                    params.add('ctiexp', value=-6, min=-7, max=-5, vary=True)
                     params.add('trapsize', value=5.0, min=0., max=30., vary=True)
                     params.add('scaling', value=0.08, min=0, max=1.0, vary=True)
                     params.add('emissiontime', value=0.35, min=0.1, max=1.0, vary=True)
@@ -144,7 +144,7 @@ def main(raft_id, directory):
                 else:
 
                     params = Parameters()
-                    params.add('ctiexp', value=-6, min=-7, max=np.log10(5E-6), vary=True)
+                    params.add('ctiexp', value=-6, min=-7, max=-5, vary=True)
                     params.add('trapsize', value=0.0, min=0., max=10., vary=False)
                     params.add('scaling', value=0.08, min=0, max=1.0, vary=False)
                     params.add('emissiontime', value=0.35, min=0.1, max=1.0, vary=False)
@@ -186,7 +186,7 @@ def main(raft_id, directory):
                 ## Second model: model with electronics
                 params = Parameters()
                 params.add('ctiexp', value=np.log10(param_results.cti_results[amp]), 
-                           min=-7, max=-5, vary=False)
+                           min=-7, max=-4, vary=False)
                 params.add('trapsize', value=0.0, min=0., max=10., vary=False)
                 params.add('scaling', value=0.08, min=0, max=1.0, vary=False)
                 params.add('emissiontime', value=0.35, min=0.1, max=1.0, vary=False)
