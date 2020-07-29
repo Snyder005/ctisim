@@ -54,7 +54,7 @@ def main(sensor_id, infile, main_dir, gain_file=None, output_dir='./'):
 
             ## Trap Correction
             trap_file = os.path.join(main_dir, 
-                                     '{0}_amp{1}_traps.pkl'.format(sensor_id, amp))
+                                     '{0}_amp{1}_trap.pkl'.format(sensor_id, amp))
             spltrap = pickle.load(open(trap_file, 'rb'))
             T = trap_operator(corrected_imarr, spltrap)
             corrected_imarr = corrected_imarr - (1-cti_results[amp])*T
