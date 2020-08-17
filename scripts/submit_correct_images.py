@@ -2,7 +2,7 @@ import numpy as np
 import argparse
 import subprocess
 
-def main(sensor_id, main_dir, infiles, gain_file=None, output_dir='./'):
+def main(sensor_id, main_dir, infiles, gain_file=None, output_dir='./', no_bias=False):
     
     for i, infile in enumerate(infiles):
 
@@ -13,6 +13,8 @@ def main(sensor_id, main_dir, infiles, gain_file=None, output_dir='./'):
         if gain_file is not None:
             command.append('-g')
             command.append(gain_file)
+        if no_bias:
+            command.append('-n')
         subprocess.check_output(command)
         print("Processing {0}, submitted to batch farm.".format(infile)) 
 
@@ -24,7 +26,9 @@ if __name__ == '__main__':
     parser.add_argument('infiles', type=str, nargs='+')
     parser.add_argument('--gain_file', '-g', type=str, default=None)
     parser.add_argument('--output_dir', '-o', type=str, default='./')
+    parser.add_argument('--no_bias', '-n', action='store_true')
     args = parser.parse_args()
 
     main(args.sensor_id, args.main_dir, args.infiles, 
-         gain_file=args.gain_file, output_dir=args.output_dir)
+         gain_file=args.gain_file, output_dir=args.output_dir,
+         no_bias=args.no_bias)

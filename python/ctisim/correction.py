@@ -24,8 +24,8 @@ def cti_inverse_operator(cti, ncols):
 
     return invD
 
-def trap_operator(pixel_signals, *traps):
-    """Calculate trap operator for given serial traps."""
+def trap_inverse_operator(pixel_signals, *traps):
+    """Calculate trapping inverse operator for given serial traps."""
 
     def f(pixel_signals):
         
@@ -35,7 +35,7 @@ def trap_operator(pixel_signals, *traps):
 
         return y
 
-    S_estimate = pixel_signals
+    S_estimate = pixel_signals # modify for pixel estimate
     
     C = f(S_estimate)
     R = np.zeros(C.shape)
@@ -44,7 +44,9 @@ def trap_operator(pixel_signals, *traps):
     
     return T
 
-def electronics_operator(pixel_signals, scale, tau, num_previous_pixels=4):
+def electronics_inverse_operator(pixel_signals, scale, tau, 
+                                 num_previous_pixels=4):
+    """Calculate electronics inverse operator for given parameterization."""
 
     r = np.exp(-1/tau)
 
@@ -56,8 +58,8 @@ def electronics_operator(pixel_signals, scale, tau, num_previous_pixels=4):
     for n in range(1, num_previous_pixels):
         offset[n, :, n:] = scale*np.maximum(0, pixel_signals[:, :-n])*(r**(n))
 
-    E = np.amax(offset, axis=0)
+    L = np.amax(offset, axis=0)
 
-    return E
+    return L
         
 
