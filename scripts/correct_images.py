@@ -4,6 +4,7 @@ from astropy.utils.exceptions import AstropyWarning, AstropyUserWarning
 import warnings
 from os.path import join, splitext
 import pickle
+import siteUtils
 
 from lsst.eotest.sensor import MaskedCCD
 from lsst.eotest.fitsTools import fitsWriteto
