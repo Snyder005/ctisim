@@ -15,7 +15,7 @@ def main(sensor_id, main_dir, infiles, gain_file=None, output_dir='./', bias_fra
             command.append(gain_file)
         if bias_frame is not None:
             command.append('-b')
-	    command.append(bias_frame)
+            command.append(bias_frame)
         subprocess.check_output(command)
         print("Processing {0}, submitted to batch farm.".format(infile)) 
 

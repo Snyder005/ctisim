@@ -1,17 +1,18 @@
-import argparse
+#!/usr/bin/env python
 from astropy.io import fits
 from astropy.utils.exceptions import AstropyWarning, AstropyUserWarning
+import argparse
 import warnings
-from os.path import join, splitext
+from os.path import join, splitext, basename
 import pickle
 import siteUtils
 
 from lsst.eotest.sensor import MaskedCCD
 from lsst.eotest.fitsTools import fitsWriteto
 from ctisim.utils import OverscanParameterResults
-from ctisim.correction import electronics_inverse_operator, trap_inverse_operator
+from ctisim.estimators import electronics_inverse_operator, localized_trap_inverse_operator
 
-def main(sensor_id, infile, main_dir, gain_file=None, output_dir='./', no_bias=False):
+def main(sensor_id, infile, main_dir, gain_file=None, output_dir='./', bias_frame=None):
 
     ## Get existing parameter results
     param_file = join(main_dir, 
@@ -20,8 +21,8 @@ def main(sensor_id, infile, main_dir, gain_file=None, output_dir='./', no_bias=F
     cti_results = param_results.cti_results
     drift_scales = param_results.drift_scales
     decay_times = param_results.decay_times
-    trap_files = [join(main_dir, 
-                       '{0}_amp{1}_trap.pkl'.format(sensor_id, i)) for i in range(1, 17)]
+    trap_files = {i : join(main_dir, 
+                       '{0}_amp{1}_trap.pkl'.format(sensor_id, i)) for i in range(1, 17)}
 
     ## Get gains
     if gain_file is not None:
@@ -32,16 +33,12 @@ def main(sensor_id, infile, main_dir, gain_file=None, output_dir='./', no_bias=F
         gains = {i : 1.0 for i in range(1, 17)}
 
     ## Output filename
-    base = splitext(os.path.basename(infile))[0]
+    base = splitext(basename(infile))[0]
     outfile = join(output_dir, '{0}_corrected.fits'.format(base))
 
-    ## Include bias frame for calibration
-    if no_bias:
-        bias_frame = None
-    else:
-        bias_frame = join(main_dir, '{0}_superbias.fits'.format(sensor_id))
     ccd = MaskedCCD(infile, bias_frame=bias_frame)
 
+    ## Perform correction
     hdulist = fits.HDUList()
     with fits.open(infile) as template:
         hdulist.append(template[0])
@@ -62,8 +59,10 @@ def main(sensor_id, infile, main_dir, gain_file=None, output_dir='./', no_bias=F
 
             ## Trap Correction
             spltrap = pickle.load(open(trap_files[amp], 'rb'))
-            Tinv = trap_inverse_operator(corrected_imarr, spltrap)
-            corrected_imarr = corrected_imarr - (1-cti_results[amp])*Tinv
+
+            corrected_imarr = localized_trap_inverse_operator(corrected_imarr, spltrap,
+                                                              cti=cti_results[amp],
+                                                              num_previous_pixels=6)
 
             ## Reassemble HDUList
             hdulist.append(fits.ImageHDU(data=corrected_imarr/gains[amp],
@@ -83,12 +82,9 @@ if __name__ == '__main__':
     parser.add_argument('main_dir', type=str)
     parser.add_argument('--output_dir', '-o', type=str, default='./')
     parser.add_argument('--gain_file', '-g', type=str, default=None)
-    parser.add_argument('--no_bias', '-n', action='store_true')
+    parser.add_argument('--bias_frame', '-b', type=str, default=None)
     args = parser.parse_args()
 
     main(args.sensor_id, args.infile, args.main_dir, 
          gain_file=args.gain_file, output_dir=args.output_dir,
-         no_bias=args.no_bias)
-
-
-        
+         bias_frame=args.bias_frame)
