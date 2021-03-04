@@ -174,3 +174,43 @@ class FloatingOutputAmplifier(BaseOutputAmplifier):
         if np.isnan(decay_time):
             raise ValueError("Decay time must be real-valued number, not NaN.")
         self.decay_time = decay_time
+
+class FloatingOutputAmplifier2(BaseOutputAmplifier):
+    """Object representing the readout amplifier of a single channel.
+
+    Attributes:
+        noise (float): Value of read noise [e-].
+        offset (float): Bias offset level [e-].
+        gain (float): Value of amplifier gain [e-/ADU].
+        do_bias_drift (bool): Specifies inclusion of bias drift.
+        drift_size (float): Strength of bias drift exponential.
+        drift_tau (float): Decay time constant for bias drift.
+    """
+    do_local_offset = True
+    
+    def __init__(self, gain, scale, decay_time, beta, noise=0.0, offset=0.0):
+
+        super().__init__(gain, noise, offset)
+        self.update_parameters(scale, decay_time, beta)
+
+    def local_offset(self, old, signal):
+        """Calculate local offset hysteresis."""
+
+        new = self.scale*(signal**self.beta)
+        
+        return np.maximum(new, old*np.exp(-1/self.decay_time))
+
+    def update_parameters(self, scale, decay_time, beta):
+        """Update parameter values, if within acceptable values."""
+
+        if scale < 0.0:
+            raise ValueError("Scale must be greater than or equal to 0.")
+        self.scale = scale
+        if decay_time <= 0.0:
+            raise ValueError("Decay time must be greater than 0.")
+        if np.isnan(decay_time):
+            raise ValueError("Decay time must be real-valued number, not NaN.")
+        self.decay_time = decay_time
+        if beta <= 0.0:
+            raise ValueError("Beta must be greater than 0.")
+        self.beta = beta

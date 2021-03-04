@@ -11,6 +11,7 @@ import numpy as np
 from ctisim import SegmentSimulator
 from ctisim import LinearTrap, LogisticTrap
 from ctisim import BaseOutputAmplifier, FloatingOutputAmplifier
+from ctisim.core import FloatingOutputAmplifier2
 
 class OverscanModel:
     """Base object handling model/data fit comparisons."""
@@ -93,11 +94,17 @@ class SimulatedModel(OverscanModel):
         trap_type = kwargs.pop('trap_type', None)
         
         ## Electronics effect optimization
-        try:
+        if 'beta' in v.keys():
+            output_amplifier = FloatingOutputAmplifier2(1.0,
+                                                        v['driftscale'],
+                                                        v['decaytime'],
+                                                        v['beta'])
+
+        elif 'driftscale' in v.keys():
             output_amplifier = FloatingOutputAmplifier(1.0, 
                                                        v['driftscale'], 
                                                        v['decaytime'])
-        except KeyError:
+        else:
             output_amplifier = BaseOutputAmplifier(1.0)
             
         ## CTI optimization
