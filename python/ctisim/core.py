@@ -77,7 +77,7 @@ class SerialTrap:
     def trap_charge(self, free_charge):
         """Perform charge capture using a logistic function."""
 
-        captured_charge = np.clip(self.f(free_charge), self.trapped_charge, 
+        captured_charge = np.clip(self.capture(free_charge), self.trapped_charge, 
                                   self._trap_array) - self.trapped_charge
         self._trapped_charge += captured_charge
 
@@ -98,7 +98,7 @@ class LinearTrap(SerialTrap):
         super().__init__(size, emission_time, pixel)
         self.scaling = scaling
 
-    def f(self, pixel_signals):
+    def capture(self, pixel_signals):
         """Calculate charge trapping function."""
 
         return np.minimum(self.size, pixel_signals*self.scaling)
@@ -114,7 +114,7 @@ class LogisticTrap(SerialTrap):
         self.f0 = f0
         self.k = k
 
-    def f(self, pixel_signals):
+    def capture(self, pixel_signals):
         
         return self.size/(1.+np.exp(-self.k*(pixel_signals-self.f0)))
 
@@ -126,7 +126,7 @@ class SplineTrap(SerialTrap):
     def __init__(self, interpolant, emission_time, pixel):
 
         super().__init__(200000., emission_time, pixel)
-        self.f = interpolant
+        self.capture = interpolant
 
 class BaseOutputAmplifier:
 
