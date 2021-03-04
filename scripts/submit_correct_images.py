@@ -8,7 +8,7 @@ def main(sensor_id, main_dir, infiles, gain_file=None, output_dir='./', bias_fra
 
         command = ['bsub', '-W', '1:00', '-R', 'bullet', '-o', 
                    '/nfs/slac/g/ki/ki19/lsst/snyder18/log/logfile_correct_images_{0:03d}.log'.format(i), 
-                   'python', 'correct_images.py', sensor_id, infile, main_dir,
+                   'python', 'correct_images.py', sensor_id, main_dir, infile,
                    '-o', output_dir]
         if gain_file is not None:
             command.append('-g')
