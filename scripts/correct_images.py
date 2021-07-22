@@ -54,10 +54,9 @@ def main(sensor_id, main_dir, infiles, gain_file=None, output_dir='./', bias_fra
 
                     ## Electronics Correction
                     if drift_scales[amp] > 0.:
-                        Linv = electronics_inverse_operator(imarr, drift_scales[amp], 
-                                                            decay_times[amp],
-                                                            num_previous_pixels=15)
-                        corrected_imarr = imarr - Linv
+                        corrected_imarr = local_offset_inverse_operator(imarr, drift_scales[amp],
+                                                                        decay_times[amp],
+                                                                        num_previous_pixels=15)
                     else:
                         corrected_imarr = imarr
 
