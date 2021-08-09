@@ -77,7 +77,7 @@ def localized_trap_operator(inputArr, trap, global_cti=0.0, num_previous_pixels=
 def localized_trap_inverse_operator(inputArr, trap, global_cti=0.0, num_previous_pixels=4):
     """Apply localized trapping inverse operator to pixel signals."""
     
-    Ny, Nx = inputArr.shape[0]
+    Ny, Nx = inputArr.shape
     a = 1 - global_cti
     r = np.exp(-1/trap.emission_time)
     
